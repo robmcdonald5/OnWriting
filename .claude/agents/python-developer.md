@@ -1,7 +1,7 @@
 ---
-name: python-code-developer
+name: python-developer
 description: Use this agent when you need to write, review, or refactor Python code with emphasis on best practices, clean architecture, and maintainability. Examples: <example>Context: User needs a Python function to process data from an API. user: 'I need a function that fetches user data from a REST API and validates the response' assistant: 'I'll use the python-code-architect agent to create a robust Python solution with proper error handling and type hints' <commentary>The user needs Python code written with best practices, so use the python-code-architect agent.</commentary></example> <example>Context: User has written some Python code and wants it reviewed for quality. user: 'Here's my Python script for data processing. Can you review it for best practices?' assistant: 'I'll use the python-code-architect agent to review your code for Python best practices, type hints, error handling, and overall code quality' <commentary>Code review request for Python code quality, perfect for the python-code-architect agent.</commentary></example>
-tools: Bash, Glob, Grep, Read, Edit, MultiEdit, Write
+tools: Bash, Glob, Grep, Read, Edit, MultiEdit, Write, TodoWrite
 model: sonnet
 color: red
 ---

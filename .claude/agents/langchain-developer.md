@@ -1,7 +1,7 @@
 ---
 name: langchain-agent-developer
 description: Use this agent when you need to build, debug, or optimize LangChain-based applications, especially multi-agent systems using LangGraph. This includes creating agent workflows, designing Pydantic schemas for agent communication, implementing RAG systems, building conversational agents, or troubleshooting LangChain code. Examples: <example>Context: User needs to create a multi-agent system for the AI Creative Writing Assistant project. user: 'I need to build a supervisor agent that coordinates between architect and constructor agents for story planning' assistant: 'I'll use the langchain-agent-developer to design a LangGraph supervisor pattern with proper Pydantic schemas for agent coordination'</example> <example>Context: User encounters issues with agent state management in their LangGraph workflow. user: 'My agents aren't properly sharing state between nodes in the graph' assistant: 'Let me use the langchain-agent-developer to debug the state management and fix the Pydantic model definitions'</example> <example>Context: User needs to implement RAG for the writing assistant's lore management. user: 'I want to add vector search capabilities to help agents access story context and character information' assistant: 'I'll use the langchain-agent-developer to implement a RAG system with proper document chunking and retrieval strategies'</example>
-tools: Bash, Glob, Grep, Read, Edit, MultiEdit, Write
+tools: Bash, Glob, Grep, Read, Edit, MultiEdit, Write, TodoWrite
 model: sonnet
 color: red
 ---
