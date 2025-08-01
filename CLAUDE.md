@@ -151,3 +151,22 @@ The primary development loop is **test-driven**. We will build the system in pha
 ### Phase 4: Refinement.. (Nothing here yet, more instructions will come when we are ready)
 
 ### Phase 5: Web Integration (Nothing here yet, more instructions will come with the MVP Python LangChain stage is fleshed out fully)
+
+---
+
+## Agent Invocation Framework: General Contractor vs. Subcontractors
+
+This framework defines when to use the main, generalist Claude session versus a specialized agent.
+
+### The Main Session: The "General Contractor"
+
+The main conversational session with Claude is the "General Contractor." It holds the full project context and is the default for all development tasks.
+
+* **Primary Worker**: The main session should perform most of the big picture coding for the project that requires full context of other files to properly implement.
+* **Research Agents**: If web research is needed to be done you should check if one of the research agents is meant for this task otherwise let the main session do the research.
+* **Developer Agents**: If there is a coding task that needs to be done it should first be considered how much of the code base this code change/addition/removal will impact. If the impact is large the main session should probably do this coding task. If the impact is small and it seems that full context isn't imparative consider tasking the coding assignment to one of the developer agents. When the developer agent is done writing the main session should analyze the code the agent generated and either approve the change or raise concerns to the user if any problems are detected with what the agent wrote.
+
+* **When to Invoke a Developer Agent**: Call a specialized agent **only** if the task is:
+    1.  **Repetitive & Boilerplate-Heavy**: Like generating a new Pydantic model or a `pytest` file structure.
+    2.  **Low-Context & Rule-Based**: The task can be completed correctly without knowing the full project history.
+    3.  **Requires High Precision**: The task demands a very specific format generally accepted by experts to not change much between code bases.
