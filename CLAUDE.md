@@ -21,7 +21,8 @@ After any significant code change, architectural decision, or workflow modificat
 * **Global Rules**: If the change affects the overall project structure, high-level strategy, or cross-cutting concerns, the update belongs in this **root `CLAUDE.md` file**.
 * **Local Rules**: If the change introduces rules or conventions that are specific to a single directory (e.g., a new required format for all agents in `src/ai_writer/agents/`), you should propose creating a **new, more specific `CLAUDE.md` file inside that subdirectory**.
 
-If you believe an update is needed, please state the proposed change and its location (root or sub-folder) and ask for my approval before proceeding.
+When bugs are fixed, complicated algorithms or methods are implemented, general misteps are addressed. Consider if it is a good idea to document these changes in the root CLAUDE.md file or to document it in a new or existing CLAUDE.md within a subfolder. The purpose of this is to make sure critical big picture ideas are continually documented in the root CLAUDE.md, but smaller, but still important architecture decisions and changes are still kept track of without cluttering the root CLAUDE.md document.
+If you believe an update is needed, please state the proposed change and its location (root or sub-folder) and ask for my approval to update or add documentation.
 
 ---
 
