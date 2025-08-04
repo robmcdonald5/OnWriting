@@ -26,7 +26,7 @@ If you believe an update is needed, please state the proposed change and its loc
 
 ## Technology Stack
 
-The project is composed of two primary services: a Python backend and a SvelteKit frontend.
+This project is composed of two primary services: a Python backend and a SvelteKit frontend.
 
 ### Backend Stack (Python)
 
@@ -47,6 +47,42 @@ The project is composed of two primary services: a Python backend and a SvelteKi
 * **Framework**: **SvelteKit5** + **TailwindCSS4**
 * **Language**: TypeScript
 * **Package Manager**: `npm`
+
+---
+
+## Professional Setup & Workflow
+
+This section outlines the professional standards for dependency management, code quality, and automation to be used in this repository.
+
+### Dependency Management (Python)
+
+This project will use **Poetry** for Python dependency management. It uses the `pyproject.toml` file to define dependencies and creates a `poetry.lock` file to ensure deterministic, reproducible builds. The `requirements.txt` file should not be used.
+
+* **Installation**: To set up the environment, run `poetry install`.
+* **Adding a new library**: Use `poetry add <package-name>`.
+* **Adding a dev library**: Use `poetry add <package-name> --group dev`.
+* **Running scripts**: Execute scripts within the managed environment using `poetry run <command>`.
+
+### Code Quality & Formatting (Python)
+
+A strict, automated code quality process will be enforced. These tools should be configured in `pyproject.toml`.
+
+* **Formatter**: **Black** will be used for uncompromising code formatting.
+* **Linter**: **Ruff** will be used as the primary linter for its speed and comprehensive rule set, replacing older tools like flake8 and pylint.
+* **Import Sorting**: **isort** will be used to automatically organize imports.
+
+### Automated Workflows (CI with GitHub Actions)
+
+The `.github/workflows/` directory will contain CI (Continuous Integration) pipelines. A primary workflow will be configured to run on every pull request against the `main` branch. This workflow must perform two critical jobs:
+1.  **Lint & Format Check**: Run `ruff` and `black --check` to ensure all code adheres to the quality standards.
+2.  **Run Tests**: Run the complete `pytest` suite to ensure no regressions have been introduced.
+
+A pull request will be blocked from merging if either of these jobs fails.
+
+### Git & Commit Conventions
+
+This project will follow the **Conventional Commits** specification. This creates a clean and readable commit history.
+* **Examples**: `feat: add LoreMaster agent`, `fix: correct Pydantic schema for story brief`, `docs: update CLAUDE.md with CI workflow`.
 
 ---
 
@@ -71,7 +107,8 @@ backend/
 │   └── api/                # Tests for the API endpoints
 ├── .env                    # Local environment variables
 ├── .env.example            # Example environment file for contributors
-├── pyproject.toml          # Project definition and dependency management
+├── pyproject.toml          # Project definition and dependency management (Poetry)
+├── poetry.lock             # For deterministic builds
 ├── Dockerfile              # Instructions to containerize the Python backend
 └── README.md
 
@@ -137,7 +174,7 @@ This framework defines when to use the main, primary Claude session versus a spe
 The main conversational session with Claude is the "General Contractor." It holds the full project context and is the default for all development tasks.
 
 * **Primary Worker**: The main session should perform big picture changes to the repository.
-* **Research Agents**: If research on a task is considered to be a good idea by Claude or the user explicitly states research needs to be done, you should check if one of the research agents is meant for this task; otherwise, let the main session do the research.
+* **Research Agents**: If research on a task is considered to be a good idea by Claude or the user explicitly states research needs to be done, you should check if one ofs the research agents is meant for this task; otherwise, let the main session do the research.
 * **Developer Agents**: If there is a coding task that needs to be done, it should first be considered how much of the codebase this code change/addition/removal will impact. If the impact is large any touches many code files at once, the main session should probably do this coding task. If the impact is smaller in scope consider tasking a relevant developer agent. When the developer agent is done outputting, the main session should analyze agents output and either approve the change or raise concerns to the user if any problems are detected with what the agent wrote. At this point the user will tell the main agent to take over the task or have the agent try again maybe with extra added context.
 
 * **When to Invoke a Developer Agent**: Below is a good framework for reasons to call upon agents:
