@@ -6,9 +6,7 @@ This file provides guidance to Claude when working on the AI Creative Writing As
 
 This project is an **AI Creative Writing Assistant** that uses a multi-department agentic framework (Architects, Constructors, Writers, Editors).
 
-The development strategy is two-phased:
-1.  **AI Core Prototyping (Python)**: The initial agentic logic will be rapidly developed and tested in Python to leverage its mature AI ecosystem.
-2.  **Production Implementation (TypeScript)**: Once the core logic is validated, it will be ported to TypeScript to build a robust, scalable backend for the final SvelteKit application.
+The development strategy is to first build a robust, production-ready **Python Backend** that contains the entire agentic system. This backend will then be exposed via a REST API. Subsequently, a **SvelteKit Frontend** will be developed to interact with the backend API, providing the user interface.
 
 ---
 
@@ -28,96 +26,62 @@ If you believe an update is needed, please state the proposed change and its loc
 
 ## Technology Stack
 
-This project uses two distinct stacks for its two development phases.
+The project is composed of two primary services: a Python backend and a SvelteKit frontend.
 
-### Phase 1: AI Core Prototyping
+### Backend Stack (Python)
 
 * **Language**: Python
-* **Agent Framework**: **LangChain** (the Python library), (input output schema for agents will use Pydantic models)
-* **Orchestration Framework**: **LangGraph** to manage complex, cyclical agent workflows.
-* **Specialized Tools**: **LangExtract** for high-precision, auditable structured data extraction where needed.
+* **Agent Framework**: **LangChain** (for core agent components)
+* **Orchestration Framework**: **LangGraph** (to manage complex, cyclical agent workflows)
+* **Web API Framework**: **FastAPI** or **LangServe** (to expose the agentic system via a REST API)
+* **Data Schemas**: **Pydantic** (for input/output schemas and data validation)
+* **Configuration**: **`pydantic-settings`** (for managing environment variables and secrets)
+* **Debugging & Tracing**: **LangSmith** (for observing, testing, and evaluating agent traces)
+* **Specialized Tools**: 
+    * **LangExtract**: For high-precision, auditable structured data extraction.
+    * **spaCy**: For fast, deterministic linguistic tasks (e.g., NER, sentence splitting).
 * **Testing Framework**: **pytest**
 
-### Phase 2: Production Backend & Frontend
+### Frontend Stack (SvelteKit)
 
+* **Framework**: **SvelteKit5** + **TailwindCSS4**
 * **Language**: TypeScript
-* **Runtime**: Node.js
 * **Package Manager**: `npm`
-* **Agent Framework**: **LangChain.js** (`@langchain/core`, `@langchain/openai`, etc.)
-* **Testing Framework**: **Vitest** for unit and integration testing.
-* **Execution Tool**: **`tsx`** to execute `.ts` files directly during development.
-* **Frontend Framework**: **SvelteKit5** + **TailwindCSS4**
 
 ---
 
 ## Directory Structure
 
-### `backend-python-prototype/`
+### `backend/` (Python Production Service)
 
-MVP product development directory for initial development of agents in LangChain Python.
-
-### `backend/` (TypeScript)
-
----
-
-Python MVP development backend:
-
-backend-python-prototype/
+backend/
 ├── notebooks/              # Jupyter notebooks for interactive testing and exploration
 ├── scripts/                # Standalone scripts to run specific pipelines from the CLI
 ├── src/
-│   └── ai_writer/          # The main source package for your application
-│       ├── agents/         # Individual agent logic (e.g., Chief-Architect.py, XyZConstructor.py, etc..)
+│   └── ai_writer/          # The main source package for the application
+│       ├── api/            # FastAPI/LangServe API definitions and routes
+│       ├── agents/         # Individual agent logic (e.g., Chief-Architect.py)
 │       ├── core/           # Core components (e.g., graph state, main orchestrator)
 │       ├── pipelines/      # LangGraph definitions chaining agents together
 │       ├── prompts/        # Directory for storing and managing prompt templates
-│       ├── utils/          # Shared utility functions
-│       └── __init__.py     # Makes `ai_writer` a Python package
+│       ├── config.py       # Pydantic-settings configuration loading
+│       └── main.py         # Main application entrypoint to start the API server
 ├── tests/
 │   ├── agents/             # Unit tests for agents
-│   └── __init__.py
+│   └── api/                # Tests for the API endpoints
 ├── .env                    # Local environment variables
-├── .gitignore
-├── pyproject.toml          # Modern Python project definition and dependency management
+├── .env.example            # Example environment file for contributors
+├── pyproject.toml          # Project definition and dependency management
+├── Dockerfile              # Instructions to containerize the Python backend
 └── README.md
 
----
-
-The final production backend:
-
-backend/
-├── dist/                   # Compiled JavaScript output from the build process
-├── src/
-│   ├── api/                # HTTP routes and controllers (e.g., Express, Fastify)
-│   │   └── v1/
-│   │       └── stories.routes.ts
-│   ├── agents/             # Individual agent logic (e.g., loreMaster.ts)
-│   ├── core/               # Core components (e.g., taskOrchestrator.ts)
-│   ├── pipelines/          # Multi-agent chains and workflows
-│   ├── lib/                # Shared utilities, types, and prompt templates
-│   └── server.ts           # Server entry point: initializes and starts the server
-├── tests/
-│   ├── agents/             # Unit tests for each agent
-│   └── pipelines/          # Integration tests for pipelines
-├── .env                    # Local environment variables (secrets, API keys)
-├── .env.example            # Example environment file for contributors
-├── .eslintrc.js            # ESLint configuration for code quality
-├── .prettierrc             # Prettier configuration for code formatting
-├── Dockerfile              # Instructions for building a deployable container image
-├── package.json
-└── tsconfig.json
-
----
-
-## Frontend Directory Structure
-
-When working in the `frontend/` directory, please adhere to this standard SvelteKit structure:
+### `frontend/` (SvelteKit UI)
 
 frontend/
 ├── src/
 │   ├── lib/
 │   │   ├── client/       # Client-side components and utilities
-│   │   └── server/       # Server-side utilities and API handlers
+│   │   └── server/       # Server-side utilities and API handlers that call the Python backend
 │   ├── routes/
 │   │   └── +layout.svelte  # Root layout, imports global CSS
 │   ├── app.css           # Global stylesheet with Tailwind directives
@@ -126,47 +90,41 @@ frontend/
 ├── postcss.config.js       # PostCSS configuration
 ├── svelte.config.js        # SvelteKit configuration
 └── tailwind.config.js      # Tailwind CSS configuration
+└── package.json
 
 ---
 
-## Phased Agent Development Workflow
+## Phased Development Workflow
 
-The primary development loop is **test-driven**. We will build the system in phases, starting with a simple, end-to-end "walking skeleton" and progressively adding complexity.
+The development process is sequential, focusing on building a robust backend first, then creating the user-facing frontend.
 
-### Phase 1: Core Agentic Writing Pipeline (Architects & Constructors) (The Brain) (MVP) (**THIS IS THE CURRENT PHASE**)
+### Phase 1: Core Agent Development (**THIS IS THE CURRENT PHASE**)
+**Goal**: Build and individually test the core agents that form the "Brain" (Architects, Constructors) of the application.
+1.  Follow a test-driven development (TDD) approach using `pytest`. Write a test for an agent first, then write the agent logic to make the test pass.
+2.  Define clear Pydantic models for each agent's inputs and outputs.
+3.  Use **LangSmith** from day one to trace and debug agent behavior during tests.
+4.  Focus on perfecting each agent in isolation before worrying about connecting them.
 
-**Goal**: Take user prompt and sucesfully pipe it through base agentic framework to make high quality input/output schemas.
+### Phase 2: Graph Integration & Orchestration
+**Goal**: Assemble the individual agents into a functional, multi-step pipeline using LangGraph.
+1.  Define the master `State` Pydantic model for the graph.
+2.  Wire the tested agents together as nodes in a LangGraph workflow inside the `pipelines/` directory.
+3.  Implement conditional logic and cycles (e.g., `Editor` agent sends work back to a `Writer` agent for revision).
+4.  Continue using **LangSmith** to visualize and debug the entire graph's flow.
 
-1.  One by one, all core agents to the framework will be built and tested with unit testing of mostly inputs generated by me (or ai assisted). No agents' inputs/outputs will be linked at this stage yet.
-2.  After core agents are built and tuned, these agents' inputs and outputs need to be linked to see how they function in a system. **This will be implemented using LangGraph**, which will define the state, nodes (agents), and conditional edges of the workflow.
-3.  Tweak the individual agents' rules/principles and output structure to best align with each other to generate a high-quality end product. Agent relationships and rules will be provided in a JSON file. The cost of running these agents together should be calculated and considered/provided to me anytime designing. For critical extraction tasks where an agent needs to parse another's output, consider using a specialized library like **LangExtract** to improve reliability and debuggability.
-4.  Analyze cost (API usage) of the current network of agents.
-5.  Rinse and repeat the previous steps to get the highest quality outputs with a reasonable economic cost.
+### Phase 3: API Exposure
+**Goal**: Expose the completed LangGraph pipeline to the outside world via a REST API.
+1.  Use **LangServe** or **FastAPI** to create API endpoints in the `api/` directory.
+2.  A primary endpoint might be `POST /generate/story`, which takes a user prompt and initiates the LangGraph pipeline.
+3.  For long-running tasks, implement a job queue pattern (e.g., with Celery & Redis) to immediately return a `job_id`.
+4.  Create status endpoints (e.g., `GET /jobs/{job_id}/status`) for the frontend to poll.
 
-**Focus**: Simplicity. Use in-memory objects for storage; no vector DB yet. Vectorization will come when integrating the frontend and backend.
-
-### Phase 2: Building writing and editing agents (Writers & Editors) (The Builders)
-
-**Goal**: Build and add writing and editing agents to the network to take in Architect and Constructor schemas in order to start generating creative writing snippets.
-
-1.  One by one, all generative agents to the framework will be built and tested with unit testing of input/output schemas from the Architect/Constructor agents.
-2.  After all core agents are built and tuned, these agents' inputs and outputs need to be linked to each other to see how they function in a system.
-3.  Tweak the individual agents' rules/principles and output structure to best align with each other to generate a high-quality end product. Agent relationships and rules will be provided in a JSON file. The cost of running these agents together should be calculated and considered/provided to me anytime designing.
-4.  Analyze cost (API usage) of the current network of agents.
-5.  Rinse and repeat the previous steps to get the highest quality outputs with a reasonable economic cost.
-
-### Phase 3: Brain and Builder integration
-
-**Goal**: Integrate the Brain and Builder agents together to be able to give a user prompt and have the agentic network produce a high-quality output (scope initially will be small for the amount of content we want outputted, this will be scaled up over time).
-
-1.  **Using LangGraph**, start integrating Brain and Builder agents one by one and unit test outputs to make sure the integration is working well and what needs to be tweaked.
-2.  Based on the quality of the integrated outputs, either tweak agents to better align with desired outputs or tweak the integration method depending on what seems to be the pain point.
-3.  Rinse and repeat until outputs are a high-quality representation of user inputs.
-4.  Consider the economic viability of agents and the various models they use.
-
-### Phase 4: Refinement.. (Nothing here yet, more instructions will come when we are ready)
-
-### Phase 5: Web Integration (Nothing here yet, more instructions will come with the MVP Python LangChain stage is fleshed out fully)
+### Phase 4: Frontend Development & Integration
+**Goal**: Build the SvelteKit user interface and connect it to the Python backend API.
+1.  Develop the SvelteKit components for the UI.
+2.  Write TypeScript functions in `frontend/src/lib/server/` to make `fetch` calls to the Python REST API.
+3.  Manage application state using Svelte Stores.
+4.  Ensure end-to-end functionality from the user clicking a button in the UI to the Python backend completing the agentic workflow.
 
 ---
 
