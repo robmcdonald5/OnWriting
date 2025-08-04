@@ -170,17 +170,17 @@ The primary development loop is **test-driven**. We will build the system in pha
 
 ## Agent Invocation Framework: General Contractor vs. Subcontractors
 
-This framework defines when to use the main, generalist Claude session versus a specialized agent.
+This framework defines when to use the main, primary Claude session versus a specialized agent.
 
 ### The Main Session: The "General Contractor"
 
 The main conversational session with Claude is the "General Contractor." It holds the full project context and is the default for all development tasks.
 
-* **Primary Worker**: The main session should perform most of the big picture coding for the project that requires full context of other files to properly implement.
-* **Research Agents**: If web research is needed to be done, you should check if one of the research agents is meant for this task; otherwise, let the main session do the research.
-* **Developer Agents**: If there is a coding task that needs to be done, it should first be considered how much of the codebase this code change/addition/removal will impact. If the impact is large, the main session should probably do this coding task. If the impact is small and it seems that full context isn't imperative, consider tasking the coding assignment to one of the developer agents. When the developer agent is done writing, the main session should analyze the code the agent generated and either approve the change or raise concerns to the user if any problems are detected with what the agent wrote.
+* **Primary Worker**: The main session should perform big picture changes to the repository.
+* **Research Agents**: If research on a task is considered to be a good idea by Claude or the user explicitly states research needs to be done, you should check if one of the research agents is meant for this task; otherwise, let the main session do the research.
+* **Developer Agents**: If there is a coding task that needs to be done, it should first be considered how much of the codebase this code change/addition/removal will impact. If the impact is large any touches many code files at once, the main session should probably do this coding task. If the impact is smaller in scope consider tasking a relevant developer agent. When the developer agent is done outputting, the main session should analyze agents output and either approve the change or raise concerns to the user if any problems are detected with what the agent wrote. At this point the user will tell the main agent to take over the task or have the agent try again maybe with extra added context.
 
-* **When to Invoke a Developer Agent**: Call a specialized agent **only** if the task is:
-    1.  **Repetitive & Boilerplate-Heavy**: Like generating a new Pydantic model or a `pytest` file structure.
+* **When to Invoke a Developer Agent**: Below is a good framework for reasons to call upon agents:
+    1.  **Repetitive & Boilerplate-Heavy**: Generating a new Pydantic model or a `pytest` file structure is an example of this.
     2.  **Low-Context & Rule-Based**: The task can be completed correctly without knowing the full project history.
     3.  **Requires High Precision**: The task demands a very specific format generally accepted by experts to not change much between many code files.
