@@ -1,0 +1,520 @@
+{
+  "framework_version": "1.0.0",
+  "last_updated": "2025-08-05",
+  "description": "Relational map of the AI Creative Writing Agentic Framework showing agent relationships, roles, inputs, and outputs",
+  
+  "departments": {
+    "architects": {
+      "description": "Define the vision & scope",
+      "agents": {
+        "plot_architect": {
+          "role": "Mission control that never writes text itself, but spins up tasks and refines the brief via back-and-forth with the user",
+          "sub_agents": [
+            "tone_theme_analyst",
+            "prompt_optimizer"
+          ],
+          "inputs": [
+            "user_requirements",
+            "project_brief",
+            "user_feedback"
+          ],
+          "outputs": [
+            "refined_brief",
+            "task_assignments",
+            "system_instructions"
+          ],
+          "relationships": {
+            "coordinates_with": ["scope_master"],
+            "delegates_to": ["lore_master", "casting_director", "beat_outliner"],
+            "receives_feedback_from": ["feedback_collector"]
+          }
+        },
+        
+        "lore_master": {
+          "role": "Centralizes worldbuilding",
+          "sub_agents": [
+            "setting_designer",
+            "mechanics_designer", 
+            "world_consistency_agent"
+          ],
+          "inputs": [
+            "world_requirements",
+            "genre_specifications",
+            "existing_lore_entries"
+          ],
+          "outputs": [
+            "world_bible",
+            "lore_documents",
+            "consistency_reports"
+          ],
+          "relationships": {
+            "provides_context_to": ["act_writer", "scene_chapter_writer"],
+            "validates_with": ["fact_checker"],
+            "stores_data_via": ["memory_manager"]
+          }
+        },
+        
+        "casting_director": {
+          "role": "High-level character roster",
+          "sub_agents": [
+            "relationship_graph_builder",
+            "archetype_analyst"
+          ],
+          "inputs": [
+            "character_requirements",
+            "story_roles_needed",
+            "relationship_dynamics"
+          ],
+          "outputs": [
+            "character_roster",
+            "relationship_graph",
+            "character_archetypes"
+          ],
+          "relationships": {
+            "provides_context_to": ["character_context_editor", "act_writer"],
+            "coordinates_with": ["lore_master"],
+            "stores_data_via": ["memory_manager"]
+          }
+        },
+        
+        "scope_master": {
+          "role": "Manages length, depth, and pacing parameters",
+          "sub_agents": [
+            "scope_change_mediator"
+          ],
+          "inputs": [
+            "target_length",
+            "audience_specifications",
+            "pacing_requirements"
+          ],
+          "outputs": [
+            "scope_parameters",
+            "pacing_guidelines",
+            "structure_framework"
+          ],
+          "relationships": {
+            "coordinates_with": ["plot_architect"],
+            "provides_constraints_to": ["act_writer", "beat_outliner"],
+            "manages_changes_via": ["scope_change_mediator"]
+          }
+        }
+      }
+    },
+    
+    "constructors": {
+      "description": "Sub-task specialists invoked by other agents",
+      "agents": {
+        "beat_outliner": {
+          "role": "Breaks high-level summary into narrative beats or key scenes",
+          "inputs": [
+            "story_summary",
+            "pacing_guidelines",
+            "genre_conventions"
+          ],
+          "outputs": [
+            "narrative_beats",
+            "scene_outlines",
+            "story_structure"
+          ],
+          "relationships": {
+            "receives_tasks_from": ["plot_architect"],
+            "provides_structure_to": ["act_writer", "scene_chapter_writer"],
+            "coordinates_with": ["scope_master"]
+          }
+        },
+        
+        "research_assistant": {
+          "role": "Fetches or simulates domain-specific knowledge (historical facts, sci-fi tech tropes)",
+          "inputs": [
+            "research_queries",
+            "domain_specifications",
+            "accuracy_requirements"
+          ],
+          "outputs": [
+            "research_reports",
+            "fact_databases",
+            "reference_materials"
+          ],
+          "relationships": {
+            "supports": ["lore_master", "act_writer", "scene_chapter_writer"],
+            "validates_with": ["fact_checker"],
+            "stores_findings_via": ["memory_manager"]
+          }
+        },
+        
+        "fact_checker": {
+          "role": "Validates internal consistency (dates, names, tech metaphors)",
+          "inputs": [
+            "content_to_validate",
+            "world_bible",
+            "established_facts"
+          ],
+          "outputs": [
+            "consistency_reports",
+            "error_flags",
+            "correction_suggestions"
+          ],
+          "relationships": {
+            "validates_for": ["lore_master", "continuity_editor"],
+            "receives_data_from": ["memory_manager"],
+            "reports_to": ["error_exception_handler"]
+          }
+        },
+        
+        "memory_manager": {
+          "role": "Handles storage & retrieval of summaries, lore docs, character sheets—possibly via a vector database",
+          "inputs": [
+            "content_to_store",
+            "retrieval_queries",
+            "metadata_tags"
+          ],
+          "outputs": [
+            "stored_documents",
+            "retrieved_content",
+            "context_summaries"
+          ],
+          "relationships": {
+            "serves_all_agents": "true",
+            "integrates_with": ["act_summarizer"],
+            "manages_persistence": "true"
+          }
+        },
+        
+        "template_generator": {
+          "role": "Produces structured templates (chapter templates, scene checklists) for Writers to fill in",
+          "inputs": [
+            "template_requirements",
+            "genre_specifications",
+            "structure_guidelines"
+          ],
+          "outputs": [
+            "chapter_templates",
+            "scene_checklists",
+            "writing_frameworks"
+          ],
+          "relationships": {
+            "provides_templates_to": ["act_writer", "scene_chapter_writer"],
+            "receives_requirements_from": ["beat_outliner"],
+            "coordinates_with": ["scope_master"]
+          }
+        }
+      }
+    },
+    
+    "writers": {
+      "description": "Generate raw story material",
+      "agents": {
+        "act_writer": {
+          "role": "Writes complete acts with configurable parameters (tone shifts, climax placement)",
+          "inputs": [
+            "act_outline",
+            "character_context",
+            "world_context",
+            "pacing_guidelines"
+          ],
+          "outputs": [
+            "act_content",
+            "scene_summaries",
+            "character_developments"
+          ],
+          "relationships": {
+            "receives_context_from": ["lore_master", "casting_director"],
+            "uses_structure_from": ["beat_outliner"],
+            "provides_content_to": ["act_summarizer"],
+            "edited_by": ["act_editor"]
+          }
+        },
+        
+        "scene_chapter_writer": {
+          "role": "Writes individual scenes/chapters with rolling memory of prior summaries",
+          "sub_agents": [
+            "scene_architect"
+          ],
+          "inputs": [
+            "scene_outline",
+            "prior_summaries",
+            "character_context",
+            "world_context"
+          ],
+          "outputs": [
+            "scene_content",
+            "chapter_content",
+            "scene_summaries"
+          ],
+          "relationships": {
+            "receives_context_from": ["memory_manager", "lore_master"],
+            "uses_templates_from": ["template_generator"],
+            "provides_content_to": ["continuity_editor", "character_context_editor"],
+            "coordinates_with": ["act_writer"]
+          }
+        },
+        
+        "act_summarizer": {
+          "role": "Reinforces long-range coherence by folding act summaries back into the Memory Manager",
+          "inputs": [
+            "completed_acts",
+            "scene_summaries",
+            "character_arcs"
+          ],
+          "outputs": [
+            "act_summaries",
+            "story_progression",
+            "coherence_reports"
+          ],
+          "relationships": {
+            "receives_content_from": ["act_writer"],
+            "stores_summaries_via": ["memory_manager"],
+            "provides_context_to": ["scene_chapter_writer"]
+          }
+        }
+      }
+    },
+    
+    "editors": {
+      "description": "Quality-assurance & refinement",
+      "agents": {
+        "editor_in_chief": {
+          "role": "Coordinates specialist editors in a fixed pipeline",
+          "inputs": [
+            "raw_content",
+            "editing_requirements",
+            "quality_standards"
+          ],
+          "outputs": [
+            "editing_pipeline",
+            "quality_reports",
+            "final_approval"
+          ],
+          "relationships": {
+            "coordinates": ["continuity_editor", "character_context_editor", "style_editor", "act_editor"],
+            "receives_content_from": ["act_writer", "scene_chapter_writer"],
+            "reports_to": ["metrics_logging_agent"]
+          }
+        },
+        
+        "continuity_editor": {
+          "role": "Checks against world lore and prior summaries",
+          "inputs": [
+            "content_to_edit",
+            "world_bible",
+            "prior_summaries"
+          ],
+          "outputs": [
+            "continuity_reports",
+            "consistency_edits",
+            "error_corrections"
+          ],
+          "relationships": {
+            "validates_with": ["fact_checker"],
+            "receives_context_from": ["memory_manager"],
+            "coordinates_with": ["editor_in_chief"]
+          }
+        },
+        
+        "character_context_editor": {
+          "role": "Ensures characters' choices and dialogue remain on-brand",
+          "inputs": [
+            "character_content",
+            "character_profiles",
+            "dialogue_samples"
+          ],
+          "outputs": [
+            "character_consistency_edits",
+            "dialogue_improvements",
+            "character_arc_validation"
+          ],
+          "relationships": {
+            "receives_context_from": ["casting_director"],
+            "validates_content_from": ["scene_chapter_writer"],
+            "coordinates_with": ["editor_in_chief"]
+          }
+        },
+        
+        "style_editor": {
+          "role": "Polishes grammar, syntax, and prose flair without altering plot or character",
+          "inputs": [
+            "raw_prose",
+            "style_guidelines",
+            "tone_specifications"
+          ],
+          "outputs": [
+            "polished_prose",
+            "style_improvements",
+            "grammar_corrections"
+          ],
+          "relationships": {
+            "receives_content_from": ["act_writer", "scene_chapter_writer"],
+            "coordinates_with": ["editor_in_chief"],
+            "maintains_consistency_with": ["character_context_editor"]
+          }
+        },
+        
+        "act_editor": {
+          "role": "Big-picture pass on pacing, narrative arcs, and thematic resonance",
+          "inputs": [
+            "complete_acts",
+            "pacing_guidelines",
+            "thematic_requirements"
+          ],
+          "outputs": [
+            "structural_edits",
+            "pacing_adjustments",
+            "thematic_enhancements"
+          ],
+          "relationships": {
+            "receives_content_from": ["act_writer"],
+            "coordinates_with": ["editor_in_chief"],
+            "validates_against": ["scope_master"]
+          }
+        }
+      }
+    },
+    
+    "support_agents": {
+      "description": "Cross-cutting & support functionality",
+      "agents": {
+        "task_orchestrator": {
+          "role": "Oversees the end-to-end flow—routes tasks from Architects → Constructors → Writers → Editors",
+          "inputs": [
+            "workflow_definitions",
+            "task_priorities",
+            "agent_availability"
+          ],
+          "outputs": [
+            "task_routing",
+            "workflow_execution",
+            "progress_tracking"
+          ],
+          "relationships": {
+            "orchestrates_all_departments": "true",
+            "coordinates_with": ["error_exception_handler"],
+            "reports_to": ["metrics_logging_agent"]
+          }
+        },
+        
+        "error_exception_handler": {
+          "role": "Detects when an agent's output goes off-rails (e.g. context window overflow) and retries or reroutes",
+          "inputs": [
+            "error_signals",
+            "agent_outputs",
+            "system_health_metrics"
+          ],
+          "outputs": [
+            "error_recovery",
+            "retry_instructions",
+            "rerouting_decisions"
+          ],
+          "relationships": {
+            "monitors_all_agents": "true",
+            "coordinates_with": ["task_orchestrator"],
+            "reports_to": ["metrics_logging_agent"]
+          }
+        },
+        
+        "metrics_logging_agent": {
+          "role": "Tracks progress (e.g. word counts, number of iterations) and surfaces logs for user review",
+          "inputs": [
+            "agent_activities",
+            "progress_metrics",
+            "performance_data"
+          ],
+          "outputs": [
+            "progress_reports",
+            "performance_metrics",
+            "activity_logs"
+          ],
+          "relationships": {
+            "monitors_all_agents": "true",
+            "provides_data_to": ["feedback_collector"],
+            "integrates_with": ["memory_manager"]
+          }
+        },
+        
+        "feedback_collector": {
+          "role": "Periodically prompts the user for high-level feedback ('Is the tone working for you?') to adjust system prompts",
+          "inputs": [
+            "user_interactions",
+            "content_samples",  
+            "feedback_triggers"
+          ],
+          "outputs": [
+            "user_feedback",
+            "system_adjustments",
+            "prompt_modifications"
+          ],
+          "relationships": {
+            "provides_feedback_to": ["plot_architect"],
+            "receives_metrics_from": ["metrics_logging_agent"],
+            "influences": ["tone_theme_analyst", "prompt_optimizer"]
+          }
+        },
+        
+        "publishing_agent": {
+          "role": "At project end, compiles the final manuscript, meta-data, cover art, and export formats (e.g. EPUB, PDF)",
+          "inputs": [
+            "final_manuscript",
+            "metadata_requirements",
+            "format_specifications"
+          ],
+          "outputs": [
+            "formatted_manuscripts",
+            "export_files",
+            "publication_packages"
+          ],
+          "relationships": {
+            "receives_content_from": ["editor_in_chief"],
+            "coordinates_with": ["metrics_logging_agent"],
+            "final_step_in_pipeline": "true"
+          }
+        }
+      }
+    }
+  },
+  
+  "workflow_patterns": {
+    "high_level_flow": [
+      "User → Plot Architect → Task Assignment",
+      "Architects → Define Scope & Context",
+      "Constructors → Build Structure & Templates", 
+      "Writers → Generate Content",
+      "Editors → Refine & Polish",
+      "Publishing Agent → Final Output"
+    ],
+    
+    "feedback_loops": [
+      "Feedback Collector → Plot Architect (system adjustments)",
+      "Act Summarizer → Memory Manager → Scene Writer (continuity)",
+      "Fact Checker → Lore Master (consistency validation)",
+      "Error Handler → Task Orchestrator (recovery routing)"
+    ],
+    
+    "data_persistence": [
+      "Memory Manager serves as central knowledge store",
+      "All agents read/write through Memory Manager",
+      "Act Summarizer feeds long-term memory",
+      "Metrics Logging Agent tracks all activities"
+    ]
+  },
+  
+  "integration_points": {
+    "langchain_components": [
+      "Agents use LangChain for LLM interaction",
+      "Memory Manager implements LangChain memory",
+      "Task Orchestrator uses LangChain agents"
+    ],
+    
+    "langgraph_workflow": [
+      "Task Orchestrator manages LangGraph workflow",
+      "Department transitions via LangGraph nodes",
+      "Conditional routing based on content quality",
+      "Error handling through LangGraph error nodes"
+    ],
+    
+    "external_integrations": [
+      "Research Assistant → Web search APIs",
+      "Memory Manager → Vector database",
+      "Publishing Agent → Export libraries",
+      "Metrics Logging Agent → LangSmith tracing"
+    ]
+  }
+}
