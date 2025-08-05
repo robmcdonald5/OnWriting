@@ -174,13 +174,15 @@ This framework defines when to use the main, primary Claude session versus a spe
 The main conversational session with Claude is the "General Contractor." It holds the full project context and is the default for all development tasks.
 
 * **Primary Worker**: The main session should perform big picture changes to the repository.
-* **Research Agents**: If research on a task is considered to be a good idea by Claude or the user explicitly states research needs to be done, you should check if one ofs the research agents is meant for this task; otherwise, let the main session do the research.
-* **Developer Agents**: If there is a coding task that needs to be done, it should first be considered how much of the codebase this code change/addition/removal will impact. If the impact is large any touches many code files at once, the main session should probably do this coding task. If the impact is smaller in scope consider tasking a relevant developer agent. When the developer agent is done outputting, the main session should analyze agents output and either approve the change or raise concerns to the user if any problems are detected with what the agent wrote. At this point the user will tell the main agent to take over the task or have the agent try again maybe with extra added context.
+* **Research Agents**: If research on a task is considered to be a good idea by Claude or the user explicitly states research needs to be done, you should check if one of the research agents is meant for this task; otherwise, let the main session do the research.
+* **Developer Agents**: If there is a coding task that needs to be done, it should first be considered how much of the codebase this code change/addition/removal will impact. If the impact is large and touches many code files at once, the main session should probably do this coding task. If the impact is smaller in scope, consider using a relevant developer agent via @-mention. When the developer agent is done outputting, the main session should analyze the agent's output and either approve the change or raise concerns to the user if any problems are detected with what the agent wrote.
 
 * **When to Invoke a Developer Agent**: Below is a good framework for reasons to call upon agents:
     1.  **Repetitive & Boilerplate-Heavy**: Generating a new Pydantic model or a `pytest` file structure is an example of this.
     2.  **Low-Context & Rule-Based**: The task can be completed correctly without knowing the full project history.
     3.  **Requires High Precision**: The task demands a very specific format generally accepted by experts to not change much between many code files.
+
+**Important**: Agents are stateless - each @-mention invocation is independent and doesn't retain context from previous invocations.
 
 ---
 
@@ -201,11 +203,15 @@ This project includes a sophisticated agent generation system to create speciali
 - Requires specialized domain knowledge (e.g., specific framework)
 - Benefits from template-driven consistency
 
-**Efficient Invocation Pattern:**
-```
-Use Task tool with agent-generator:
-"I am the agent-generator agent. Create a new [technology]-[type] agent..."
-```
+**Agent Invocation Patterns:**
+- **Direct @-mention**: Type `@agent-name` (e.g., `@python-developer`) to invoke an agent with typeahead support
+- **Agent Management**: Use `/agents` to view and manage available agents
+- **Agent Creation**: Use `@agent-generator` to create new specialized agents
+
+**Examples:**
+- `@python-developer create a FastAPI endpoint for user authentication`
+- `@langgraph-researcher find best practices for state management`
+- `@agent-generator create a new redis-developer agent`
 
 **Agent Types:**
 - **Research Agents**: Documentation gathering, best practices (model: sonnet, color: green)
@@ -223,3 +229,12 @@ New agents must include:
 - Development principles (developer agents) or search strategies (research agents)
 - Customized output format while maintaining template structure
 - No overlap with existing agents in `.claude/agents/`
+
+### Using the Agent System
+
+**Key Points:**
+- Agents are invoked using `@` mentions (e.g., `@pytest-developer`)
+- Each agent invocation is stateless and independent
+- The main session coordinates agent outputs and maintains project context
+- Use `/agents` command to see all available agents
+- Agents can specify custom models in their frontmatter (default: opus for developers, sonnet for researchers)
