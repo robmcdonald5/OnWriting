@@ -1,0 +1,35 @@
+AI Creative Writing Assistant Backend
+Copyright (C) 2025 Joshua McDonald
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+IMPORTANT NOTICE:
+The GNU Affero General Public License is a copyleft license that requires
+anyone who distributes the software or runs it on a server to provide the
+source code to users, including for any changes they make. This applies to
+all derivative works and modifications.
+
+For the full license text, please visit:
+https://www.gnu.org/licenses/agpl-3.0.txt
+
+Additional permissions under GNU AGPL version 3 section 7:
+If you modify this Program, or any covered work, by linking or combining it
+with proprietary software components, the licensors of this Program grant you
+additional permission to convey the resulting work, provided that:
+1. The proprietary components are clearly marked and segregated
+2. The AGPL-licensed backend remains accessible with its full source code
+3. Any modifications to the AGPL-licensed code are made available under AGPL
+
+Note: The frontend code in the ../frontend/ directory is licensed separately
+under the MIT License. This AGPL license applies only to the backend code.
