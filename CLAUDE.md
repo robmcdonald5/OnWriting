@@ -181,3 +181,45 @@ The main conversational session with Claude is the "General Contractor." It hold
     1.  **Repetitive & Boilerplate-Heavy**: Generating a new Pydantic model or a `pytest` file structure is an example of this.
     2.  **Low-Context & Rule-Based**: The task can be completed correctly without knowing the full project history.
     3.  **Requires High Precision**: The task demands a very specific format generally accepted by experts to not change much between many code files.
+
+---
+
+## Agent Generation Workflow
+
+This project includes a sophisticated agent generation system to create specialized developer and research agents efficiently.
+
+### Agent Generator Location & Usage
+
+* **Agent Generator**: `.claude/agents/agent-generator.md`
+* **Templates**: `.claude/agents/agent-template-developer.md` and `.claude/agents/agent-template-researcher.md`
+* **Existing Agents**: `.claude/agents/` contains pre-built specialized agents
+
+### Streamlined Agent Creation Process
+
+**When to Create New Agents:**
+- Task will be repeated 5+ times with consistent patterns
+- Requires specialized domain knowledge (e.g., specific framework)
+- Benefits from template-driven consistency
+
+**Efficient Invocation Pattern:**
+```
+Use Task tool with agent-generator:
+"I am the agent-generator agent. Create a new [technology]-[type] agent..."
+```
+
+**Agent Types:**
+- **Research Agents**: Documentation gathering, best practices (model: sonnet, color: green)
+- **Developer Agents**: Code implementation, boilerplate generation (model: opus, color: red)
+
+**Naming Convention:**
+- Research: `[technology]-researcher` (e.g., `fastapi-researcher`)
+- Developer: `[technology]-developer` (e.g., `pydantic-developer`)
+
+### Quality Standards for New Agents
+
+New agents must include:
+- 3 realistic usage examples in description
+- 5-7 specific capabilities for the technology
+- Development principles (developer agents) or search strategies (research agents)
+- Customized output format while maintaining template structure
+- No overlap with existing agents in `.claude/agents/`
