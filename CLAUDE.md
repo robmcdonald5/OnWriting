@@ -10,9 +10,9 @@ The development strategy is to first build a robust, production-ready **Python B
 
 ---
 
-## Core Directive: Maintain This Document 📜
+## Core Directive: Maintain This Document
 
-After any significant code change, architectural decision, or workflow modification, you must pause and consider if this `CLAUDE.md` file needs to be updated to reflect the change.
+After any significant code change, architectural decision, or workflow modification, you must pause and consider if this `CLAUDE.md` file needs to be updated to reflect the change. If you think a change is needed present it and ask for approval to update/change CLAUDE.md.
 
 ### Decision Framework for Updates
 
@@ -21,6 +21,8 @@ After any significant code change, architectural decision, or workflow modificat
 
 When bugs are fixed, complicated algorithms or methods are implemented, general misteps are addressed. Consider if it is a good idea to document these changes in the root CLAUDE.md file or to document it in a new or existing CLAUDE.md within a subfolder. The purpose of this is to make sure critical big picture ideas are continually documented in the root CLAUDE.md, but smaller, but still important architecture decisions and changes are still kept track of without cluttering the root CLAUDE.md document.
 If you believe an update is needed, please state the proposed change and its location (root or sub-folder) and ask for my approval to update or add documentation.
+
+When you decide updating is needed within CLAUDE.md file(s) also consider if any existing agents and / commands need updated regarding the problem or paradigm change. Take care to not mess up the formating of these agents and commands if making changes.
 
 ---
 
