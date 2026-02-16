@@ -18,7 +18,7 @@ The `lang-agent-framework-map.json` file is the **single source of truth** for t
 
 **Location**: `backend/lang-agent-framework-map.json`
 
-### Critical Maintenance Requirement ⚠️
+### Critical Maintenance Requirement
 
 **This JSON file MUST be updated whenever:**
 
@@ -99,6 +99,84 @@ Standard relationship types to use:
 
 ---
 
+## Prototype Architecture (v0.1.0)
+
+### Overview
+
+The prototype implements a minimal 4-agent pipeline to test the core hypothesis: **structured decomposition through Pydantic schemas produces better creative writing at scale than a single monolithic LLM prompt.**
+
+### Pipeline Flow
+
+```
+User Prompt → [Plot Architect] → StoryBrief + CharacterRoster + WorldContext
+           → [Beat Outliner]  → StoryOutline (beats + scene outlines)
+           → [Scene Writer]   → SceneDraft (raw prose)
+           → [Style Editor]   → EditFeedback
+               ├── NOT approved & revisions < 2 → back to Scene Writer
+               ├── approved OR max revisions    → next scene
+               └── last scene complete          → END
+```
+
+### Implemented Agents
+
+| Agent | File | LLM Calls | Temperature | Output |
+|-------|------|-----------|-------------|--------|
+| Plot Architect | `agents/plot_architect.py` | 3 (brief, roster, world) | 0.3 (planning) | StoryBrief, CharacterRoster, WorldContext |
+| Beat Outliner | `agents/beat_outliner.py` | 1 | 0.3 (planning) | StoryOutline |
+| Scene Writer | `agents/scene_writer.py` | 1 per scene | 0.7 (creative) | SceneDraft |
+| Style Editor | `agents/style_editor.py` | 1 per review | 0.3 (analytical) | EditFeedback |
+
+### Key Design Decisions
+
+1. **TypedDict for LangGraph state** (`pipelines/prototype.py:GraphState`): LangGraph works best with TypedDict states for partial update semantics. The Pydantic `PipelineState` in `schemas/pipeline.py` is kept for validation/documentation but GraphState drives the actual pipeline.
+
+2. **Flat-ish schemas for Gemini compatibility**: Structured output via `method="json_schema"` works well with Gemini but deeply nested models can be unreliable. If `StoryOutline` proves too complex for a single call, break Beat Outliner into two calls.
+
+3. **Numeric ToneProfile axes (0.0-1.0)**: Instead of adjectives like "dark" or "formal", the tone profile uses numeric scales. This makes editor feedback unambiguous and measurable.
+
+4. **`prior_scene_summary` for rolling context**: Each `SceneOutline` carries a summary of prior scenes, avoiding the need to pass full prior prose text (which would blow context windows).
+
+5. **Quality score gate (0.7)**: The Style Editor's `EditFeedback.quality_score` determines revision loops. Below 0.7 triggers revision; `max_revisions=2` caps cost.
+
+### Schema Module Map
+
+All schemas in `src/ai_writer/schemas/`:
+- `story.py` — Genre, ToneProfile, ScopeParameters, StoryBrief
+- `characters.py` — CharacterRole, CharacterProfile, CharacterRelationship, CharacterRoster
+- `world.py` — Location, WorldRule, WorldContext
+- `structure.py` — BeatType, EmotionalValence, NarrativeBeat, SceneOutline, ActOutline, StoryOutline
+- `writing.py` — SceneDraft, ActDraft
+- `editing.py` — EditType, EditSeverity, EditItem, EditFeedback
+- `pipeline.py` — PipelineState (Pydantic reference model)
+
+### Running the Prototype
+
+```bash
+cd backend
+poetry run python scripts/run_prototype.py "Your story prompt"
+poetry run pytest                          # Unit tests (51 tests, mocked LLM)
+poetry run pytest -m integration           # Integration tests (requires GOOGLE_API_KEY)
+```
+
+### Poetry Environment Note
+
+The shell may have `VIRTUAL_ENV` set to an old root-level `.venv`. If `poetry run` fails with "broken virtualenv", prefix commands with `unset VIRTUAL_ENV &&` or use a fresh terminal.
+
+---
+
 ## Backend-Specific Conventions
 
-*[This section will be expanded as backend development progresses with Python-specific patterns, LangChain conventions, testing strategies, etc.]*
+### Agent Pattern
+
+All agents follow the same pattern:
+1. Function signature: `def run_<agent_name>(state: dict) -> dict`
+2. Extract needed fields from state dict
+3. Build system prompt and user context
+4. Call LLM (structured or unstructured)
+5. Return partial state update dict
+
+### Testing Pattern
+
+- **Unit tests**: Mock LLM calls with `@patch`, verify state field reads and returned keys
+- **Pipeline tests**: Test conditional edges and helper nodes with synthetic state
+- **Integration tests**: Mark with `@pytest.mark.integration`, require real API key
