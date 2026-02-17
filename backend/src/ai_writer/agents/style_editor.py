@@ -4,7 +4,7 @@ Uses planning_temperature (0.3) for analytical, consistent evaluation.
 Returns EditFeedback with a quality_score gate for the revision loop.
 """
 
-from ai_writer.agents.base import get_structured_llm
+from ai_writer.agents.base import get_structured_llm, invoke
 from ai_writer.config import get_settings
 from ai_writer.schemas.editing import EditFeedback
 
@@ -77,7 +77,7 @@ def run_style_editor(state: dict) -> dict:
     print(f"  [Style Editor] Reviewing scene {latest_draft.scene_id}...", flush=True)
 
     feedback_llm = get_structured_llm(EditFeedback, temperature=temp)
-    raw_feedback = feedback_llm.invoke(
+    raw_feedback = invoke(feedback_llm,
         [
             {"role": "system", "content": system_prompt},
             {

@@ -3,7 +3,7 @@
 Single LLM call: StoryBrief + CharacterRoster + WorldContext → StoryOutline
 """
 
-from ai_writer.agents.base import get_structured_llm
+from ai_writer.agents.base import get_structured_llm, invoke
 from ai_writer.config import get_settings
 from ai_writer.schemas.structure import StoryOutline
 
@@ -49,7 +49,7 @@ def run_beat_outliner(state: dict) -> dict:
         f"## World Context\n{world_context.model_dump_json(indent=2)}"
     )
 
-    story_outline = outline_llm.invoke(
+    story_outline = invoke(outline_llm,
         [
             {"role": "system", "content": BEAT_OUTLINER_SYSTEM},
             {

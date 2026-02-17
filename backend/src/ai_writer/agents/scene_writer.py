@@ -4,7 +4,7 @@ Takes the current scene outline and relevant context, produces a SceneDraft.
 If revision_count > 0, incorporates editor feedback.
 """
 
-from ai_writer.agents.base import get_llm
+from ai_writer.agents.base import get_llm, invoke
 from ai_writer.config import get_settings
 from ai_writer.schemas.writing import SceneDraft
 
@@ -105,7 +105,7 @@ def run_scene_writer(state: dict) -> dict:
     print(f"  [Scene Writer] Writing scene {scene_outline.scene_number}{revision_label}...", flush=True)
 
     llm = get_llm(temperature=temp)
-    response = llm.invoke(
+    response = invoke(llm,
         [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Write the scene:\n\n{scene_context}"},

@@ -6,7 +6,7 @@ Three sequential LLM calls with planning_temperature (0.3):
 3. StoryBrief → WorldContext
 """
 
-from ai_writer.agents.base import get_structured_llm
+from ai_writer.agents.base import get_structured_llm, invoke
 from ai_writer.config import get_settings
 from ai_writer.schemas.characters import CharacterRoster
 from ai_writer.schemas.story import StoryBrief
@@ -65,7 +65,7 @@ def run_plot_architect(state: dict) -> dict:
     # 1. Generate StoryBrief
     print("  [Plot Architect] Generating story brief...", flush=True)
     brief_llm = get_structured_llm(StoryBrief, temperature=temp)
-    story_brief = brief_llm.invoke(
+    story_brief = invoke(brief_llm,
         [
             {"role": "system", "content": STORY_BRIEF_SYSTEM},
             {"role": "user", "content": user_prompt},
@@ -76,7 +76,7 @@ def run_plot_architect(state: dict) -> dict:
     print(f"  [Plot Architect] Brief done: \"{story_brief.title}\"", flush=True)
     print("  [Plot Architect] Generating character roster...", flush=True)
     roster_llm = get_structured_llm(CharacterRoster, temperature=temp)
-    character_roster = roster_llm.invoke(
+    character_roster = invoke(roster_llm,
         [
             {"role": "system", "content": CHARACTER_ROSTER_SYSTEM},
             {
@@ -90,7 +90,7 @@ def run_plot_architect(state: dict) -> dict:
     print(f"  [Plot Architect] Roster done: {len(character_roster.characters)} characters", flush=True)
     print("  [Plot Architect] Generating world context...", flush=True)
     world_llm = get_structured_llm(WorldContext, temperature=temp)
-    world_context = world_llm.invoke(
+    world_context = invoke(world_llm,
         [
             {"role": "system", "content": WORLD_CONTEXT_SYSTEM},
             {
