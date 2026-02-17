@@ -1,0 +1,70 @@
+[tool.poetry]
+name = "ai-writer"
+version = "0.1.0"
+description = "AI Creative Writing Assistant - Multi-agent pipeline for structured story generation"
+authors = ["McDon"]
+readme = "README.md"
+packages = [{include = "ai_writer", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+langchain = ">=0.3,<1.0"
+langchain-core = ">=0.3,<1.0"
+langchain-google-genai = ">=2.0,<3.0"
+langgraph = ">=0.2,<1.0"
+pydantic = ">=2.0,<3.0"
+pydantic-settings = ">=2.0,<3.0"
+langsmith = ">=0.1,<1.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.0,<9.0"
+pytest-asyncio = ">=0.23,<1.0"
+black = ">=24.0,<26.0"
+ruff = ">=0.4,<1.0"
+isort = ">=5.0,<6.0"
+ipykernel = ">=6.0,<7.0"
+mypy = "^1.19.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]  # Line length handled by black; string literals in prompts exceed 88 chars
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = [
+    "langchain_google_genai.*",
+    "langgraph.*",
+    "langchain.*",
+    "langchain_core.*",
+    "langsmith.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "integration: marks tests that require real LLM API calls (deselect with '-m \"not integration\"')",
+]
