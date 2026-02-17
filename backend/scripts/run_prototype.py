@@ -7,6 +7,8 @@ Usage:
 
 import sys
 import time
+from datetime import datetime
+from pathlib import Path
 
 from ai_writer.pipelines.prototype import build_prototype_pipeline
 
@@ -93,6 +95,50 @@ def main():
         print(f"\n--- Scene {draft.act_number}.{draft.scene_number} ---\n")
         print(draft.prose)
     print("\n" + "=" * 70)
+
+    # Save output to file
+    output_dir = Path(__file__).resolve().parent.parent / "output"
+    output_dir.mkdir(exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    title_slug = brief.title.lower().replace(" ", "_")[:40] if brief else "untitled"
+    output_path = output_dir / f"{timestamp}_{title_slug}.txt"
+
+    lines = []
+    lines.append(f"Title: {brief.title}" if brief else "Title: Unknown")
+    lines.append(f"Genre: {brief.genre.value}" if brief else "")
+    lines.append(f"Themes: {', '.join(brief.themes)}" if brief else "")
+    lines.append(f"Premise: {brief.premise}" if brief else "")
+    lines.append(f"Generated: {datetime.now().isoformat()}")
+    lines.append(f"Pipeline time: {elapsed:.1f}s")
+    lines.append(f"Total words: {total_words}")
+    lines.append("")
+
+    if roster:
+        lines.append("CHARACTERS")
+        lines.append("-" * 40)
+        for c in roster.characters:
+            lines.append(f"  {c.name} ({c.role.value}): {c.motivation}")
+        lines.append("")
+
+    if feedback:
+        lines.append("EDIT FEEDBACK")
+        lines.append("-" * 40)
+        for fb in feedback:
+            status = "APPROVED" if fb.approved else "REVISION NEEDED"
+            lines.append(f"  Scene {fb.scene_id}: score={fb.quality_score:.2f} [{status}]")
+            lines.append(f"    {fb.overall_assessment}")
+        lines.append("")
+
+    lines.append("=" * 70)
+    lines.append("MANUSCRIPT")
+    lines.append("=" * 70)
+    for draft in drafts:
+        lines.append(f"\n--- Scene {draft.act_number}.{draft.scene_number} ---\n")
+        lines.append(draft.prose)
+
+    output_path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"\nOutput saved to: {output_path}")
 
 
 if __name__ == "__main__":
