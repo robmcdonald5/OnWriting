@@ -101,6 +101,9 @@ def run_scene_writer(state: dict) -> dict:
                 revision_instructions=latest_feedback.revision_instructions,
             )
 
+    revision_label = f" (revision {revision_count})" if revision_count > 0 else ""
+    print(f"  [Scene Writer] Writing scene {scene_outline.scene_number}{revision_label}...", flush=True)
+
     llm = get_llm(temperature=temp)
     response = llm.invoke(
         [
@@ -121,6 +124,8 @@ def run_scene_writer(state: dict) -> dict:
         characters_used=[c.character_id for c in characters],
         scene_summary=f"Scene {scene_outline.scene_number}: {scene_outline.scene_goal}",
     )
+
+    print(f"  [Scene Writer] Scene {scene_outline.scene_number} done: {word_count} words", flush=True)
 
     # Replace last draft if revising, otherwise append
     scene_drafts = list(state.get("scene_drafts", []))

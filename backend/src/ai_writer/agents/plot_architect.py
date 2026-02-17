@@ -63,6 +63,7 @@ def run_plot_architect(state: dict) -> dict:
     user_prompt = state["user_prompt"]
 
     # 1. Generate StoryBrief
+    print("  [Plot Architect] Generating story brief...", flush=True)
     brief_llm = get_structured_llm(StoryBrief, temperature=temp)
     story_brief = brief_llm.invoke(
         [
@@ -72,6 +73,8 @@ def run_plot_architect(state: dict) -> dict:
     )
 
     # 2. Generate CharacterRoster
+    print(f"  [Plot Architect] Brief done: \"{story_brief.title}\"", flush=True)
+    print("  [Plot Architect] Generating character roster...", flush=True)
     roster_llm = get_structured_llm(CharacterRoster, temperature=temp)
     character_roster = roster_llm.invoke(
         [
@@ -84,6 +87,8 @@ def run_plot_architect(state: dict) -> dict:
     )
 
     # 3. Generate WorldContext
+    print(f"  [Plot Architect] Roster done: {len(character_roster.characters)} characters", flush=True)
+    print("  [Plot Architect] Generating world context...", flush=True)
     world_llm = get_structured_llm(WorldContext, temperature=temp)
     world_context = world_llm.invoke(
         [
@@ -94,6 +99,8 @@ def run_plot_architect(state: dict) -> dict:
             },
         ]
     )
+
+    print(f"  [Plot Architect] World done: {len(world_context.locations)} locations, {len(world_context.rules)} rules", flush=True)
 
     return {
         "story_brief": story_brief,

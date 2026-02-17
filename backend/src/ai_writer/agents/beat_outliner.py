@@ -40,6 +40,7 @@ def run_beat_outliner(state: dict) -> dict:
     character_roster = state["character_roster"]
     world_context = state["world_context"]
 
+    print("  [Beat Outliner] Building story outline...", flush=True)
     outline_llm = get_structured_llm(StoryOutline, temperature=temp)
 
     context = (
@@ -57,6 +58,8 @@ def run_beat_outliner(state: dict) -> dict:
             },
         ]
     )
+
+    print(f"  [Beat Outliner] Outline done: {story_outline.total_scenes} scenes, {story_outline.total_beats} beats", flush=True)
 
     return {
         "story_outline": story_outline,

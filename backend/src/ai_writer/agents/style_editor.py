@@ -74,6 +74,8 @@ def run_style_editor(state: dict) -> dict:
             voice_info += f"- {char.name}: {char.voice_notes}\n"
     eval_context += voice_info
 
+    print(f"  [Style Editor] Reviewing scene {latest_draft.scene_id}...", flush=True)
+
     feedback_llm = get_structured_llm(EditFeedback, temperature=temp)
     raw_feedback = feedback_llm.invoke(
         [
@@ -88,6 +90,9 @@ def run_style_editor(state: dict) -> dict:
 
     # Ensure scene_id is set correctly
     edit_feedback.scene_id = latest_draft.scene_id
+
+    status = "APPROVED" if edit_feedback.approved else "NEEDS REVISION"
+    print(f"  [Style Editor] Score: {edit_feedback.quality_score:.2f} [{status}]", flush=True)
 
     feedback_list = list(state.get("edit_feedback", []))
     feedback_list.append(edit_feedback)
