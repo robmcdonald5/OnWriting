@@ -62,6 +62,16 @@ def should_revise_or_advance(state: GraphState) -> str:
     current_idx = state.get("current_scene_index", 0)
     total_scenes = _get_total_scenes(state)
 
+    # Log dimension scores for visibility
+    rubric = latest_feedback.rubric
+    decision = "REVISE" if not latest_feedback.approved else "PASS"
+    print(
+        f"  [Pipeline] Scene {latest_feedback.scene_id}: "
+        f"{rubric.dimension_summary()} "
+        f"→ {latest_feedback.quality_score:.2f} [{decision}]",
+        flush=True,
+    )
+
     # If not approved and we have revision budget, revise
     if not latest_feedback.approved and revision_count < max_revisions:
         return "revise"

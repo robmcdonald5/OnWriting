@@ -36,6 +36,8 @@ def main():
     print("Running pipeline...")
     start = time.time()
 
+    # Recursion limit: 2 planning nodes + n_scenes * (3 * max_revisions + 3).
+    # With 5 scenes and 2 revisions: 2 + 5*9 = 47. Use 50 for headroom.
     result = pipeline.invoke(
         {
             "user_prompt": prompt,
@@ -46,7 +48,8 @@ def main():
             "max_revisions": 2,
             "current_stage": "planning",
             "errors": [],
-        }
+        },
+        config={"recursion_limit": 50},
     )
 
     elapsed = time.time() - start
@@ -73,7 +76,9 @@ def main():
     # Structure
     outline = result.get("story_outline")
     if outline:
-        print(f"\nStructure: {outline.total_scenes} scenes, {outline.total_beats} beats")
+        print(
+            f"\nStructure: {outline.total_scenes} scenes, {outline.total_beats} beats"
+        )
 
     # Drafts
     drafts = result.get("scene_drafts", [])
@@ -85,7 +90,23 @@ def main():
     print(f"Edit rounds: {len(feedback)}")
     for fb in feedback:
         status = "APPROVED" if fb.approved else "REVISION NEEDED"
-        print(f"  - Scene {fb.scene_id}: score={fb.quality_score:.2f} [{status}]")
+        r = fb.rubric
+        print(f"  Scene {fb.scene_id}: composite={fb.quality_score:.2f} [{status}]")
+        print(f"    {r.dimension_summary()}")
+        wc_status = "OK" if r.word_count_in_range else "OUT OF RANGE"
+        tense_status = "consistent" if r.tense_consistent else "inconsistent"
+        print(
+            f"    word_count: {wc_status} | tense: {tense_status} | "
+            f"slop: {r.slop_ratio:.2f}"
+        )
+        if r.has_critical_failure():
+            print("    ** CRITICAL FAILURE on one or more dimensions **")
+        if r.dimension_reasoning:
+            # Show first 200 chars of reasoning
+            snippet = r.dimension_reasoning[:200]
+            if len(r.dimension_reasoning) > 200:
+                snippet += "..."
+            print(f'    Reasoning: "{snippet}"')
 
     # Full manuscript
     print("\n" + "=" * 70)
@@ -126,8 +147,21 @@ def main():
         lines.append("-" * 40)
         for fb in feedback:
             status = "APPROVED" if fb.approved else "REVISION NEEDED"
-            lines.append(f"  Scene {fb.scene_id}: score={fb.quality_score:.2f} [{status}]")
-            lines.append(f"    {fb.overall_assessment}")
+            r = fb.rubric
+            lines.append(
+                f"  Scene {fb.scene_id}: composite={fb.quality_score:.2f} [{status}]"
+            )
+            lines.append(f"    {r.dimension_summary()}")
+            wc_status = "OK" if r.word_count_in_range else "OUT OF RANGE"
+            tense_status = "consistent" if r.tense_consistent else "inconsistent"
+            lines.append(
+                f"    word_count: {wc_status} | tense: {tense_status} | "
+                f"slop: {r.slop_ratio:.2f}"
+            )
+            if r.dimension_reasoning:
+                lines.append(f"    Reasoning: {r.dimension_reasoning[:300]}")
+            if fb.overall_assessment:
+                lines.append(f"    Assessment: {fb.overall_assessment}")
         lines.append("")
 
     lines.append("=" * 70)
