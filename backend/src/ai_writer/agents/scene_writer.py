@@ -29,12 +29,17 @@ Output ONLY the scene prose. No headers, no meta-commentary."""
 REVISION_ADDENDUM = """
 
 ## REVISION INSTRUCTIONS
-This is revision #{revision_count}. The editor provided this feedback:
+This is revision #{revision_count}.
 
+### Dimension Scores from Previous Draft
+{dimension_breakdown}
+
+### Editor Notes
 {revision_instructions}
 
-Address the editor's concerns while preserving what works. Focus on the specific
-issues mentioned."""
+{focus_dimensions}
+Address the editor's concerns while preserving what works. Focus especially on
+the lowest-scoring dimensions listed above."""
 
 
 def _get_scene_and_characters(state: dict):
@@ -96,20 +101,54 @@ def run_scene_writer(state: dict) -> dict:
         edit_feedback = state.get("edit_feedback", [])
         if edit_feedback:
             latest_feedback = edit_feedback[-1]
+            rubric = latest_feedback.rubric
+
+            # Build dimension breakdown
+            dimension_breakdown = rubric.dimension_summary()
+
+            # Identify critical and weak dimensions for focus
+            focus_lines = []
+            dims = {
+                "style_adherence": rubric.style_adherence,
+                "character_voice": rubric.character_voice,
+                "outline_adherence": rubric.outline_adherence,
+                "pacing": rubric.pacing,
+                "prose_quality": rubric.prose_quality,
+            }
+            for dim_name, score in dims.items():
+                if score == 1:
+                    focus_lines.append(
+                        f"- {dim_name} (scored 1/3) — CRITICAL, must improve"
+                    )
+                elif score == 2:
+                    focus_lines.append(
+                        f"- {dim_name} (scored 2/3) — room for improvement"
+                    )
+
+            focus_text = ""
+            if focus_lines:
+                focus_text = "### Focus Your Revision On\n" + "\n".join(focus_lines)
+
             system_prompt += REVISION_ADDENDUM.format(
                 revision_count=revision_count,
+                dimension_breakdown=dimension_breakdown,
                 revision_instructions=latest_feedback.revision_instructions,
+                focus_dimensions=focus_text,
             )
 
     revision_label = f" (revision {revision_count})" if revision_count > 0 else ""
-    print(f"  [Scene Writer] Writing scene {scene_outline.scene_number}{revision_label}...", flush=True)
+    print(
+        f"  [Scene Writer] Writing scene {scene_outline.scene_number}{revision_label}...",
+        flush=True,
+    )
 
     llm = get_llm(temperature=temp)
-    response = invoke(llm,
+    response = invoke(
+        llm,
         [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Write the scene:\n\n{scene_context}"},
-        ]
+        ],
     )
 
     prose = str(response.content)
@@ -125,7 +164,10 @@ def run_scene_writer(state: dict) -> dict:
         scene_summary=f"Scene {scene_outline.scene_number}: {scene_outline.scene_goal}",
     )
 
-    print(f"  [Scene Writer] Scene {scene_outline.scene_number} done: {word_count} words", flush=True)
+    print(
+        f"  [Scene Writer] Scene {scene_outline.scene_number} done: {word_count} words",
+        flush=True,
+    )
 
     # Replace last draft if revising, otherwise append
     scene_drafts = list(state.get("scene_drafts", []))
