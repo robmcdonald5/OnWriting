@@ -172,3 +172,6 @@ cython_debug/
 
 # LLM Ignore
 .claude/*
+
+# Poetry/VS settings
+.vscode/*
