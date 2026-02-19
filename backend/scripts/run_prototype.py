@@ -3,6 +3,8 @@
 Usage:
     poetry run python scripts/run_prototype.py "Your story prompt"
     poetry run python scripts/run_prototype.py  # Uses default prompt
+
+To create a variant experiment, copy this file and modify STORY_CONFIG below.
 """
 
 import sys
@@ -11,6 +13,57 @@ from datetime import datetime
 from pathlib import Path
 
 from ai_writer.pipelines.prototype import build_prototype_pipeline
+from ai_writer.prompts.configs import PrototypeConfig
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PROTOTYPE CONFIGURATION
+# All tunable parameters in one place. Copy this script and modify these
+# values to run different experiments without touching agent code.
+# ═══════════════════════════════════════════════════════════════════════════
+
+STORY_CONFIG = PrototypeConfig(
+    # ── Story Structure ──
+    num_acts=1,
+    scenes_per_act="2-3",
+    num_themes="2-4",
+    min_word_count=800,
+    max_word_count=1200,
+    # ── Tone Defaults (overridden at runtime by StoryBrief.tone_profile) ──
+    default_formality=0.5,
+    default_darkness=0.5,
+    default_humor=0.3,
+    default_pacing=0.5,
+    prose_style="natural and engaging",
+    # ── Editor Calibration ──
+    normalization_guidance=(
+        "A first draft typically scores 1-2 on most dimensions. "
+        "Score 3 only for genuinely excellent execution."
+    ),
+    # ── Pipeline Control ──
+    max_revisions=2,
+    # ── Agent Role Names ──
+    story_brief_role="Plot Architect",
+    character_roster_role="Casting Director",
+    world_context_role="Lore Master",
+    beat_outliner_role="Beat Outliner",
+    scene_writer_role="Scene Writer",
+    style_editor_role="Style Editor",
+    # ── Closing Motivations ──
+    story_brief_motivation=(
+        "Be specific and creative. The brief drives all downstream writing."
+    ),
+    character_roster_motivation=(
+        "Make characters feel real and distinct from each other."
+    ),
+    world_context_motivation="The world should feel consistent and lived-in.",
+    beat_outliner_motivation=(
+        "Be extremely specific. Scene Writers should make ZERO plot "
+        "decisions — everything\nshould be predetermined in this outline."
+    ),
+    scene_writer_motivation=(
+        "Output ONLY the scene prose. No headers, no meta-commentary."
+    ),
+)
 
 DEFAULT_PROMPT = (
     "Write a short sci-fi story about a lone engineer on a deep-space relay station "
@@ -45,9 +98,10 @@ def main():
             "edit_feedback": [],
             "current_scene_index": 0,
             "revision_count": 0,
-            "max_revisions": 2,
+            "max_revisions": STORY_CONFIG.max_revisions,
             "current_stage": "planning",
             "errors": [],
+            "prompt_configs": STORY_CONFIG.to_prompt_configs(),
         },
         config={"recursion_limit": 50},
     )

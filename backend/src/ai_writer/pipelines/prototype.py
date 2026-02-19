@@ -40,6 +40,7 @@ class GraphState(TypedDict, total=False):
     max_revisions: int
     current_stage: str
     errors: list[str]
+    prompt_configs: dict[str, Any]
 
 
 def _get_total_scenes(state: GraphState) -> int:
