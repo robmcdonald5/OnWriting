@@ -6,40 +6,10 @@ If revision_count > 0, incorporates editor feedback.
 
 from ai_writer.agents.base import get_llm, invoke
 from ai_writer.config import get_settings
+from ai_writer.prompts.builders import build_scene_writer_prompt
+from ai_writer.prompts.components import REVISION_ADDENDUM
+from ai_writer.prompts.configs import SceneWriterPromptConfig
 from ai_writer.schemas.writing import SceneDraft
-
-SCENE_WRITER_SYSTEM = """You are a Scene Writer for a creative writing system.
-Write the prose for the given scene based on the detailed outline provided.
-
-Guidelines:
-- Follow the scene outline EXACTLY — do not invent new plot points
-- Match the tone_profile: formality={formality}, darkness={darkness}, humor={humor}, pacing={pacing}
-- If prose_style is specified, match it: {prose_style}
-- Write from the POV character's perspective
-- Use the opening_hook to start the scene
-- Use the closing_image to end the scene
-- Hit the key_dialogue_beats naturally within the prose
-- Follow the emotional_arc described in the outline
-- Keep each character's voice consistent with their voice_notes and speech_patterns
-- Target approximately {target_word_count} words
-- Write complete, polished prose — not notes or outlines
-
-Output ONLY the scene prose. No headers, no meta-commentary."""
-
-REVISION_ADDENDUM = """
-
-## REVISION INSTRUCTIONS
-This is revision #{revision_count}.
-
-### Dimension Scores from Previous Draft
-{dimension_breakdown}
-
-### Editor Notes
-{revision_instructions}
-
-{focus_dimensions}
-Address the editor's concerns while preserving what works. Focus especially on
-the lowest-scoring dimensions listed above."""
 
 
 def _get_scene_and_characters(state: dict):
@@ -74,15 +44,21 @@ def run_scene_writer(state: dict) -> dict:
     story_brief = state["story_brief"]
     tone = story_brief.tone_profile
 
-    # Build the system prompt with tone parameters
-    system_prompt = SCENE_WRITER_SYSTEM.format(
-        formality=tone.formality,
-        darkness=tone.darkness,
-        humor=tone.humor,
-        pacing=tone.pacing,
-        prose_style=tone.prose_style or "natural and engaging",
-        target_word_count=scene_outline.target_word_count,
+    # Build config — start from state config, override with runtime tone values
+    configs = state.get("prompt_configs", {})
+    base_config = configs.get("scene_writer", SceneWriterPromptConfig())
+    config = base_config.model_copy(
+        update={
+            "formality": tone.formality,
+            "darkness": tone.darkness,
+            "humor": tone.humor,
+            "pacing": tone.pacing,
+            "prose_style": tone.prose_style or base_config.prose_style,
+            "target_word_count": scene_outline.target_word_count,
+        }
     )
+
+    system_prompt = build_scene_writer_prompt(config)
 
     # Build scene context
     scene_context = (

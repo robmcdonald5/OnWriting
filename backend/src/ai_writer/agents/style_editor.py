@@ -8,6 +8,8 @@ Uses low temperature (0.1) for deterministic evaluation per LLM-as-judge researc
 """
 
 from ai_writer.agents.base import get_structured_llm, invoke
+from ai_writer.prompts.builders import build_style_editor_prompt
+from ai_writer.prompts.configs import StyleEditorPromptConfig
 from ai_writer.schemas.editing import (
     EditFeedback,
     SceneRubric,
@@ -18,51 +20,6 @@ from ai_writer.utils.text_analysis import (
     check_word_count,
     compute_slop_score,
 )
-
-STYLE_EDITOR_SYSTEM = """You are a Style Editor for a creative writing system.
-Evaluate the scene prose against the outline using the rubric below.
-
-## Evaluation Process
-
-For EACH dimension, you MUST:
-1. Cite 2-3 specific phrases from the text as evidence
-2. Explain how they support your score
-3. Then assign your 1-3 score
-
-A first draft typically scores 1-2 on most dimensions. Score 3 only for genuinely excellent execution.
-
-## Rubric (1-3 scale)
-
-### Style Adherence
-- 1 (Low): Prose contradicts 2+ tone axes (formality={formality}, darkness={darkness}, humor={humor}, pacing={pacing})
-- 2 (Medium): Matches most tone axes, minor mismatches
-- 3 (High): All tone axes reflected naturally in prose
-
-### Character Voice
-- 1 (Low): Characters sound interchangeable, generic dialogue
-- 2 (Medium): Some distinction between characters, occasional drift
-- 3 (High): Each character unmistakably voiced per their voice_notes
-
-### Outline Adherence
-- 1 (Low): Missing opening_hook OR closing_image OR >1 dialogue beat
-- 2 (Medium): All structural elements present, minor deviations from outline
-- 3 (High): opening_hook, closing_image, and all key_dialogue_beats executed precisely
-
-### Pacing
-- 1 (Low): Monotonous rhythm, no sentence variety, flat emotional arc
-- 2 (Medium): Some rhythm variation, emotional arc partially achieved
-- 3 (High): Dynamic sentence lengths serving emotional beats, arc fully realized
-
-### Prose Quality
-- 1 (Low): Heavy AI-isms (delve, tapestry, testament to, etc.), telling over showing
-- 2 (Medium): Mostly clean prose, some generic phrasing
-- 3 (High): Vivid, specific language; show-don't-tell throughout; original imagery
-
-## Important Notes
-- Flag any overused AI phrases (delve, tapestry, testament to, myriad, embark, navigate, multifaceted, pivotal, gossamer, iridescent, luminous, etc.) under prose_quality
-- If prose_quality has AI-isms, it cannot score above 2
-- Write revision_instructions ONLY if quality is insufficient — focus on the lowest-scoring dimensions
-- In revision_instructions, be specific: quote the problematic text and suggest concrete improvements"""
 
 # Evaluation temperature — lower than creative agents for consistency
 _EVAL_TEMPERATURE = 0.1
@@ -117,12 +74,19 @@ def run_style_editor(state: dict) -> dict:
 
     # ── Layer 2: LLM evaluation (1 structured call) ──
 
-    system_prompt = STYLE_EDITOR_SYSTEM.format(
-        formality=tone.formality,
-        darkness=tone.darkness,
-        humor=tone.humor,
-        pacing=tone.pacing,
+    # Build config — start from state config, override with runtime tone values
+    configs = state.get("prompt_configs", {})
+    base_config = configs.get("style_editor", StyleEditorPromptConfig())
+    config = base_config.model_copy(
+        update={
+            "formality": tone.formality,
+            "darkness": tone.darkness,
+            "humor": tone.humor,
+            "pacing": tone.pacing,
+        }
     )
+
+    system_prompt = build_style_editor_prompt(config)
 
     # Build evaluation context
     eval_context = (
