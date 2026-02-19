@@ -8,7 +8,7 @@ from ai_writer.schemas.characters import (
     CharacterRole,
     CharacterRoster,
 )
-from ai_writer.schemas.editing import EditFeedback
+from ai_writer.schemas.editing import EditFeedback, SceneRubric
 from ai_writer.schemas.story import Genre, StoryBrief, ToneProfile
 from ai_writer.schemas.structure import ActOutline, SceneOutline, StoryOutline
 
@@ -105,6 +105,13 @@ class TestSceneWriter:
                 quality_score=0.5,
                 approved=False,
                 revision_instructions="Improve pacing",
+                rubric=SceneRubric(
+                    style_adherence=2,
+                    character_voice=1,
+                    outline_adherence=3,
+                    pacing=2,
+                    prose_quality=2,
+                ),
             )
         ]
 
@@ -115,3 +122,55 @@ class TestSceneWriter:
 
         assert len(result["scene_drafts"]) == 1
         assert result["scene_drafts"][0].prose == "Revised scene prose."
+
+    @patch("ai_writer.agents.scene_writer.get_llm")
+    @patch("ai_writer.agents.scene_writer.get_settings")
+    def test_revision_includes_dimension_breakdown(self, mock_settings, mock_get_llm):
+        """Verify the revision addendum includes per-dimension scores."""
+        mock_settings.return_value = MagicMock(default_temperature=0.7)
+
+        mock_response = MagicMock()
+        mock_response.content = "Revised prose with better voice."
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = mock_response
+        mock_get_llm.return_value = mock_llm
+
+        from ai_writer.schemas.writing import SceneDraft
+
+        existing = [
+            SceneDraft(
+                scene_id="s1",
+                act_number=1,
+                scene_number=1,
+                prose="Old.",
+                word_count=1,
+            )
+        ]
+        feedback = [
+            EditFeedback(
+                scene_id="s1",
+                quality_score=0.5,
+                approved=False,
+                revision_instructions="Character voice needs work.",
+                rubric=SceneRubric(
+                    style_adherence=2,
+                    character_voice=1,
+                    outline_adherence=3,
+                    pacing=2,
+                    prose_quality=2,
+                ),
+            )
+        ]
+
+        state = _build_state(
+            revision_count=1, existing_drafts=existing, edit_feedback=feedback
+        )
+        run_scene_writer(state)
+
+        # Verify the LLM was called with dimension info in the system prompt
+        call_args = mock_llm.invoke.call_args[0][0]
+        system_msg = call_args[0]["content"]
+        assert "style=2/3" in system_msg
+        assert "voice=1/3" in system_msg
+        assert "character_voice (scored 1/3)" in system_msg
+        assert "CRITICAL" in system_msg

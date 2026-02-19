@@ -4,37 +4,12 @@ Takes the current scene outline and relevant context, produces a SceneDraft.
 If revision_count > 0, incorporates editor feedback.
 """
 
-from ai_writer.agents.base import get_llm
+from ai_writer.agents.base import get_llm, invoke
 from ai_writer.config import get_settings
+from ai_writer.prompts.builders import build_scene_writer_prompt
+from ai_writer.prompts.components import REVISION_ADDENDUM
+from ai_writer.prompts.configs import SceneWriterPromptConfig
 from ai_writer.schemas.writing import SceneDraft
-
-SCENE_WRITER_SYSTEM = """You are a Scene Writer for a creative writing system.
-Write the prose for the given scene based on the detailed outline provided.
-
-Guidelines:
-- Follow the scene outline EXACTLY — do not invent new plot points
-- Match the tone_profile: formality={formality}, darkness={darkness}, humor={humor}, pacing={pacing}
-- If prose_style is specified, match it: {prose_style}
-- Write from the POV character's perspective
-- Use the opening_hook to start the scene
-- Use the closing_image to end the scene
-- Hit the key_dialogue_beats naturally within the prose
-- Follow the emotional_arc described in the outline
-- Keep each character's voice consistent with their voice_notes and speech_patterns
-- Target approximately {target_word_count} words
-- Write complete, polished prose — not notes or outlines
-
-Output ONLY the scene prose. No headers, no meta-commentary."""
-
-REVISION_ADDENDUM = """
-
-## REVISION INSTRUCTIONS
-This is revision #{revision_count}. The editor provided this feedback:
-
-{revision_instructions}
-
-Address the editor's concerns while preserving what works. Focus on the specific
-issues mentioned."""
 
 
 def _get_scene_and_characters(state: dict):
@@ -69,15 +44,21 @@ def run_scene_writer(state: dict) -> dict:
     story_brief = state["story_brief"]
     tone = story_brief.tone_profile
 
-    # Build the system prompt with tone parameters
-    system_prompt = SCENE_WRITER_SYSTEM.format(
-        formality=tone.formality,
-        darkness=tone.darkness,
-        humor=tone.humor,
-        pacing=tone.pacing,
-        prose_style=tone.prose_style or "natural and engaging",
-        target_word_count=scene_outline.target_word_count,
+    # Build config — start from state config, override with runtime tone values
+    configs = state.get("prompt_configs", {})
+    base_config = configs.get("scene_writer", SceneWriterPromptConfig())
+    config = base_config.model_copy(
+        update={
+            "formality": tone.formality,
+            "darkness": tone.darkness,
+            "humor": tone.humor,
+            "pacing": tone.pacing,
+            "prose_style": tone.prose_style or base_config.prose_style,
+            "target_word_count": scene_outline.target_word_count,
+        }
     )
+
+    system_prompt = build_scene_writer_prompt(config)
 
     # Build scene context
     scene_context = (
@@ -96,20 +77,54 @@ def run_scene_writer(state: dict) -> dict:
         edit_feedback = state.get("edit_feedback", [])
         if edit_feedback:
             latest_feedback = edit_feedback[-1]
+            rubric = latest_feedback.rubric
+
+            # Build dimension breakdown
+            dimension_breakdown = rubric.dimension_summary()
+
+            # Identify critical and weak dimensions for focus
+            focus_lines = []
+            dims = {
+                "style_adherence": rubric.style_adherence,
+                "character_voice": rubric.character_voice,
+                "outline_adherence": rubric.outline_adherence,
+                "pacing": rubric.pacing,
+                "prose_quality": rubric.prose_quality,
+            }
+            for dim_name, score in dims.items():
+                if score == 1:
+                    focus_lines.append(
+                        f"- {dim_name} (scored 1/3) — CRITICAL, must improve"
+                    )
+                elif score == 2:
+                    focus_lines.append(
+                        f"- {dim_name} (scored 2/3) — room for improvement"
+                    )
+
+            focus_text = ""
+            if focus_lines:
+                focus_text = "### Focus Your Revision On\n" + "\n".join(focus_lines)
+
             system_prompt += REVISION_ADDENDUM.format(
                 revision_count=revision_count,
+                dimension_breakdown=dimension_breakdown,
                 revision_instructions=latest_feedback.revision_instructions,
+                focus_dimensions=focus_text,
             )
 
     revision_label = f" (revision {revision_count})" if revision_count > 0 else ""
-    print(f"  [Scene Writer] Writing scene {scene_outline.scene_number}{revision_label}...", flush=True)
+    print(
+        f"  [Scene Writer] Writing scene {scene_outline.scene_number}{revision_label}...",
+        flush=True,
+    )
 
     llm = get_llm(temperature=temp)
-    response = llm.invoke(
+    response = invoke(
+        llm,
         [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Write the scene:\n\n{scene_context}"},
-        ]
+        ],
     )
 
     prose = str(response.content)
@@ -125,7 +140,10 @@ def run_scene_writer(state: dict) -> dict:
         scene_summary=f"Scene {scene_outline.scene_number}: {scene_outline.scene_goal}",
     )
 
-    print(f"  [Scene Writer] Scene {scene_outline.scene_number} done: {word_count} words", flush=True)
+    print(
+        f"  [Scene Writer] Scene {scene_outline.scene_number} done: {word_count} words",
+        flush=True,
+    )
 
     # Replace last draft if revising, otherwise append
     scene_drafts = list(state.get("scene_drafts", []))
