@@ -1,111 +1,11 @@
-"""Deterministic text analysis utilities — zero LLM cost.
+"""Basic deterministic text checks — word count and tense consistency.
 
 These run before the Style Editor LLM call to catch objective issues
-that don't need subjective judgment: word count deviations, tense
-inconsistencies, and overused LLM phrases ("slop").
+that don't need subjective judgment.
 """
 
 import re
-from dataclasses import dataclass, field
-
-# --- Slop Detection ---
-
-# Common LLM-isms sourced from EQ-Bench "slop score" and community lists.
-# Literal phrases are escaped for safe regex compilation.
-_SLOP_LITERALS: list[str] = [
-    "delve",
-    "tapestry",
-    "testament to",
-    "it's worth noting",
-    "it is worth noting",
-    "myriad",
-    "embark",
-    "navigate the",
-    "multifaceted",
-    "pivotal",
-    "in the realm of",
-    "a symphony of",
-    "a dance of",
-    "nestled",
-    "the silence was deafening",
-    "sent shivers down",
-    "a weight settled",
-    "eyes widened",
-    "heart pounded",
-    "breath caught",
-    "shattered the silence",
-    "hung heavy in the air",
-    "cutting through the",
-    "echoed through",
-    "loomed large",
-    "gossamer",
-    "iridescent",
-    "luminous",
-    "resplendent",
-    "enigmatic",
-    "cacophony",
-    "serendipitous",
-    "ineffable",
-    "palpable tension",
-    "couldn't help but",
-    "a sense of",
-    "in that moment",
-    "the world seemed to",
-    "time seemed to",
-]
-
-# Regex patterns for slop phrases that need flexible matching.
-# These are compiled as-is (NOT escaped).
-_SLOP_REGEX: list[str] = [
-    r"little did .{1,20} know",
-]
-
-# Pre-compile all patterns for performance
-_SLOP_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(rf"\b{re.escape(phrase)}\b", re.IGNORECASE) for phrase in _SLOP_LITERALS
-] + [re.compile(rf"\b{pattern}\b", re.IGNORECASE) for pattern in _SLOP_REGEX]
-
-
-@dataclass
-class SlopResult:
-    """Result of slop phrase detection."""
-
-    found_phrases: list[str] = field(default_factory=list)
-    total_words: int = 0
-    slop_ratio: float = 1.0  # 1.0 = clean, 0.0 = heavy slop
-
-    @property
-    def is_clean(self) -> bool:
-        return len(self.found_phrases) == 0
-
-
-def compute_slop_score(prose: str) -> SlopResult:
-    """Scan prose for overused LLM phrases and return a cleanliness ratio.
-
-    The ratio uses a ×10 penalty multiplier to make slop visible even in
-    long texts: ``1 - (slop_hits / total_words) * 10``, clamped to [0, 1].
-    For a 1000-word passage, 10 slop hits produce a ratio of 0.9;
-    100 hits would floor it at 0.0.
-    """
-    words = prose.split()
-    total_words = len(words)
-    if total_words == 0:
-        return SlopResult(found_phrases=[], total_words=0, slop_ratio=1.0)
-
-    found: list[str] = []
-    for pattern in _SLOP_PATTERNS:
-        matches = pattern.findall(prose)
-        found.extend(matches)
-
-    hit_count = len(found)
-    ratio = max(0.0, 1.0 - (hit_count / total_words) * 10)
-
-    return SlopResult(
-        found_phrases=found,
-        total_words=total_words,
-        slop_ratio=round(ratio, 2),
-    )
-
+from dataclasses import dataclass
 
 # --- Word Count Check ---
 
