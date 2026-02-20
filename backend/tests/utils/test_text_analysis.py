@@ -1,61 +1,16 @@
-"""Tests for deterministic text analysis utilities."""
+"""Tests for basic text analysis utilities (word count, tense).
+
+Slop detection tests have been moved to test_slop.py.
+Structural analysis tests are in test_prose_structure.py.
+Vocabulary tests are in test_vocabulary.py.
+"""
 
 from unittest.mock import patch
 
 from ai_writer.utils.text_analysis import (
     check_tense_consistency,
     check_word_count,
-    compute_slop_score,
 )
-
-
-class TestComputeSlopScore:
-    def test_clean_prose_scores_high(self):
-        prose = (
-            "The old station creaked in the void. Commander Voss checked "
-            "the readout again, fingers tracing the faded numbers. Nothing "
-            "had changed. The signal was still there, pulsing like a heartbeat "
-            "from a dead world."
-        )
-        result = compute_slop_score(prose)
-        assert result.slop_ratio >= 0.9
-        assert result.is_clean
-
-    def test_slop_heavy_prose_scores_low(self):
-        prose = (
-            "She decided to delve into the tapestry of mysteries, which was "
-            "a testament to her multifaceted nature. It's worth noting that "
-            "she chose to embark on this pivotal journey to navigate the "
-            "enigmatic realm of the unknown."
-        )
-        result = compute_slop_score(prose)
-        assert result.slop_ratio < 0.9
-        assert not result.is_clean
-        assert len(result.found_phrases) >= 5
-
-    def test_empty_prose(self):
-        result = compute_slop_score("")
-        assert result.slop_ratio == 1.0
-        assert result.total_words == 0
-        assert result.is_clean
-
-    def test_single_slop_phrase(self):
-        prose = "The results were a testament to our hard work and dedication."
-        result = compute_slop_score(prose)
-        assert len(result.found_phrases) == 1
-        assert "testament to" in result.found_phrases[0].lower()
-
-    def test_case_insensitive(self):
-        prose = "She chose to DELVE into the mystery."
-        result = compute_slop_score(prose)
-        assert len(result.found_phrases) >= 1
-
-    def test_regex_pattern_matches(self):
-        """The regex slop pattern 'little did X know' should match."""
-        prose = "Little did she know that the world was about to change."
-        result = compute_slop_score(prose)
-        assert len(result.found_phrases) >= 1
-        assert "little did she know" in result.found_phrases[0].lower()
 
 
 class TestCheckWordCount:
@@ -160,15 +115,15 @@ class TestCheckTenseConsistency:
 
     def test_spacy_model_missing_returns_unknown(self):
         """When spaCy model is not installed, return unknown/consistent."""
-        import ai_writer.utils.text_analysis as module
+        import ai_writer.utils.text_analysis.basics as basics_module
 
         # Reset cached model so _get_nlp() tries to load again
-        original = module._nlp_model
-        module._nlp_model = None
+        original = basics_module._nlp_model
+        basics_module._nlp_model = None
         try:
-            with patch.object(module, "_get_nlp", return_value=None):
+            with patch.object(basics_module, "_get_nlp", return_value=None):
                 result = check_tense_consistency("She walked down the hall.")
                 assert result.dominant_tense == "unknown"
                 assert result.consistent is True
         finally:
-            module._nlp_model = original
+            basics_module._nlp_model = original

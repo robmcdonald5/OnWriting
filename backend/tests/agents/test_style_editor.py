@@ -165,3 +165,51 @@ class TestStyleEditor:
         assert fb.rubric.word_count_in_range is False
         # Word count failure should prevent approval even with all 3s
         assert fb.approved is False
+
+    @patch("ai_writer.agents.style_editor.invoke")
+    @patch("ai_writer.agents.style_editor.get_structured_llm")
+    def test_rubric_has_structural_fields(self, mock_get_llm, mock_invoke):
+        """Verify structural analysis fields are populated in the rubric."""
+        mock_output = StyleEditorOutput(
+            style_adherence=2,
+            character_voice=2,
+            outline_adherence=2,
+            pacing=2,
+            prose_quality=2,
+            dimension_reasoning="Average.",
+        )
+        mock_invoke.return_value = mock_output
+        mock_get_llm.return_value = MagicMock()
+
+        state = _build_state()
+        result = run_style_editor(state)
+
+        fb = result["edit_feedback"][0]
+        # Structural fields should exist (advisory, not gating)
+        assert isinstance(fb.rubric.opener_monotony, bool)
+        assert isinstance(fb.rubric.length_monotony, bool)
+        assert isinstance(fb.rubric.passive_heavy, bool)
+        assert isinstance(fb.rubric.structural_monotony, bool)
+
+    @patch("ai_writer.agents.style_editor.invoke")
+    @patch("ai_writer.agents.style_editor.get_structured_llm")
+    def test_rubric_has_vocabulary_fields(self, mock_get_llm, mock_invoke):
+        """Verify vocabulary analysis fields are populated in the rubric."""
+        mock_output = StyleEditorOutput(
+            style_adherence=2,
+            character_voice=2,
+            outline_adherence=2,
+            pacing=2,
+            prose_quality=2,
+            dimension_reasoning="Average.",
+        )
+        mock_invoke.return_value = mock_output
+        mock_get_llm.return_value = MagicMock()
+
+        state = _build_state()
+        result = run_style_editor(state)
+
+        fb = result["edit_feedback"][0]
+        # Vocabulary fields should exist (advisory, not gating)
+        assert isinstance(fb.rubric.low_diversity, bool)
+        assert isinstance(fb.rubric.vocabulary_basic, bool)
