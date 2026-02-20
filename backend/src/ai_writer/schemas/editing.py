@@ -105,6 +105,16 @@ class SceneRubric(BaseModel):
     pacing: int = Field(default=2, ge=1, le=3)
     prose_quality: int = Field(default=2, ge=1, le=3)
 
+    # --- Structural analysis (advisory, not gating) ---
+    opener_monotony: bool = Field(default=False)
+    length_monotony: bool = Field(default=False)
+    passive_heavy: bool = Field(default=False)
+    structural_monotony: bool = Field(default=False)
+
+    # --- Vocabulary analysis (advisory, not gating) ---
+    low_diversity: bool = Field(default=False)
+    vocabulary_basic: bool = Field(default=False)
+
     # --- Chain-of-thought reasoning ---
     dimension_reasoning: str = Field(default="")
 
