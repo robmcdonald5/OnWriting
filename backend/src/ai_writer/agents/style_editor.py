@@ -9,7 +9,11 @@ Uses low temperature (0.1) for deterministic evaluation per LLM-as-judge researc
 
 from ai_writer.agents.base import get_structured_llm, invoke
 from ai_writer.prompts.builders import build_style_editor_prompt
-from ai_writer.prompts.configs import StyleEditorPromptConfig
+from ai_writer.prompts.configs import (
+    ProseStructureConfig,
+    StyleEditorPromptConfig,
+    VocabularyConfig,
+)
 from ai_writer.schemas.editing import (
     EditFeedback,
     SceneRubric,
@@ -18,7 +22,9 @@ from ai_writer.schemas.editing import (
 from ai_writer.utils.text_analysis import (
     check_tense_consistency,
     check_word_count,
+    compute_prose_structure,
     compute_slop_score,
+    compute_vocabulary_metrics,
 )
 
 # Evaluation temperature — lower than creative agents for consistency
@@ -72,10 +78,34 @@ def run_style_editor(state: dict) -> dict:
     if slop_result.found_phrases:
         print(f"    slop phrases: {slop_result.found_phrases[:5]}", flush=True)
 
+    # Structural analysis
+    configs = state.get("prompt_configs", {})
+    structure_config = configs.get("prose_structure", ProseStructureConfig())
+    structure_result = compute_prose_structure(prose, structure_config)
+
+    structure_flags = structure_result.summary_lines()
+    if structure_flags:
+        print("    structural flags:", flush=True)
+        for flag in structure_flags:
+            print(f"      - {flag}", flush=True)
+    else:
+        print("    structure: OK", flush=True)
+
+    # Vocabulary analysis
+    vocab_config = configs.get("vocabulary", VocabularyConfig())
+    vocab_result = compute_vocabulary_metrics(prose, vocab_config)
+
+    vocab_flags = vocab_result.summary_lines()
+    if vocab_flags:
+        print("    vocabulary flags:", flush=True)
+        for flag in vocab_flags:
+            print(f"      - {flag}", flush=True)
+    else:
+        print("    vocabulary: OK", flush=True)
+
     # ── Layer 2: LLM evaluation (1 structured call) ──
 
     # Build config — start from state config, override with runtime tone values
-    configs = state.get("prompt_configs", {})
     base_config = configs.get("style_editor", StyleEditorPromptConfig())
     config = base_config.model_copy(
         update={
@@ -115,6 +145,18 @@ def run_style_editor(state: dict) -> dict:
         for phrase in slop_result.found_phrases:
             eval_context += f'- "{phrase}"\n'
 
+    # Inject structural analysis as advisory context
+    if structure_flags:
+        eval_context += "\n## Structural Analysis (automated)\n"
+        for flag in structure_flags:
+            eval_context += f"- {flag}\n"
+
+    # Inject vocabulary analysis as advisory context
+    if vocab_flags:
+        eval_context += "\n## Vocabulary Analysis (automated)\n"
+        for flag in vocab_flags:
+            eval_context += f"- {flag}\n"
+
     print(
         f"  [Style Editor] Evaluating scene {latest_draft.scene_id}...",
         flush=True,
@@ -140,6 +182,14 @@ def run_style_editor(state: dict) -> dict:
         word_count_in_range=wc_result.within_tolerance,
         tense_consistent=tense_result.consistent,
         slop_ratio=slop_result.slop_ratio,
+        # Structural analysis (advisory)
+        opener_monotony=structure_result.opener_monotony,
+        length_monotony=structure_result.length_monotony,
+        passive_heavy=structure_result.passive_heavy,
+        structural_monotony=structure_result.structural_monotony,
+        # Vocabulary analysis (advisory)
+        low_diversity=vocab_result.low_diversity,
+        vocabulary_basic=vocab_result.vocabulary_basic,
         # LLM dimensions
         style_adherence=llm_output.style_adherence,
         character_voice=llm_output.character_voice,
