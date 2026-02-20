@@ -4,7 +4,7 @@ This file provides backend-specific guidance to Claude when working on the AI Cr
 
 ---
 
-## Core Directive: Maintain This Document 📜
+## Core Directive: Maintain This Document
 
 Similar to the root CLAUDE.md, this document must be kept up-to-date with backend-specific architectural decisions, workflows, and conventions. When making changes that affect backend structure, patterns, or agent implementations, consider if this document needs updating.
 
@@ -138,6 +138,12 @@ User Prompt → [Plot Architect] → StoryBrief + CharacterRoster + WorldContext
 
 5. **Quality score gate (0.7)**: The Style Editor's `EditFeedback.quality_score` determines revision loops. Below 0.7 triggers revision; `max_revisions=2` caps cost.
 
+6. **Advisory over gating for text analysis**: Structural and vocabulary metrics (sentence monotony, lexical diversity, readability) are injected into the Style Editor's LLM evaluation context as advisory information, **not** added as hard gates in `compute_approved()`. This avoids false-positive rejections on creative prose that intentionally breaks "rules" (e.g., a character who speaks in passive voice, or uniform sentence lengths for literary effect). Hard gating can be promoted per-metric once false-positive rates are known.
+
+7. **Text analysis as a package**: `utils/text_analysis/` is a package (not a single file) with sub-modules for each concern (`basics.py`, `slop.py`, `structure.py`, `vocabulary.py`). The `__init__.py` re-exports all public API, so existing imports like `from ai_writer.utils.text_analysis import compute_slop_score` continue to work without changes.
+
+8. **Vendored slop data**: Slop detection uses statistically-derived phrase/word lists from `sam-paech/antislop-sampler`, stored as JSON in `utils/slop_data/`. The data is loaded lazily and cached. Do not hand-edit the JSON files — update them by re-downloading from the upstream source.
+
 ### Schema Module Map
 
 All schemas in `src/ai_writer/schemas/`:
@@ -154,7 +160,7 @@ All schemas in `src/ai_writer/schemas/`:
 ```bash
 cd backend
 poetry run python scripts/run_prototype.py "Your story prompt"
-poetry run pytest                          # Unit tests (51 tests, mocked LLM)
+poetry run pytest                          # Unit tests (121 tests, mocked LLM)
 poetry run pytest -m integration           # Integration tests (requires GOOGLE_API_KEY)
 ```
 
