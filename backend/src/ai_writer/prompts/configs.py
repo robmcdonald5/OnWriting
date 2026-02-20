@@ -92,6 +92,23 @@ class SceneWriterPromptConfig(BaseModel):
     )
 
 
+class ProseStructureConfig(BaseModel):
+    """Thresholds for structural monotony detection."""
+
+    opener_monotony_threshold: float = 0.30  # >30% same POS opener
+    length_cv_threshold: float = 0.30  # CV below this = monotonous
+    passive_ratio_threshold: float = 0.20  # >20% passive
+    dep_distance_std_threshold: float = 0.50  # std below this = simple SVO
+
+
+class VocabularyConfig(BaseModel):
+    """Thresholds for vocabulary analysis."""
+
+    mtld_threshold: float = 60.0  # below = low diversity
+    zipf_threshold: float = 5.5  # above = overly common vocabulary
+    mattr_window: int = 50
+
+
 class StyleEditorPromptConfig(BaseModel):
     """Variables for Style Editor system prompt.
 
@@ -143,6 +160,17 @@ class PrototypeConfig(BaseModel):
         "A first draft typically scores 1-2 on most dimensions. "
         "Score 3 only for genuinely excellent execution."
     )
+
+    # ── Prose Structure Thresholds ────────────────────────────────────
+    opener_monotony_threshold: float = 0.30
+    length_cv_threshold: float = 0.30
+    passive_ratio_threshold: float = 0.20
+    dep_distance_std_threshold: float = 0.50
+
+    # ── Vocabulary Thresholds ─────────────────────────────────────────
+    mtld_threshold: float = 60.0
+    zipf_threshold: float = 5.5
+    mattr_window: int = 50
 
     # ── Pipeline Control ─────────────────────────────────────────────
     max_revisions: int = 2
@@ -217,5 +245,16 @@ class PrototypeConfig(BaseModel):
                 humor=self.default_humor,
                 pacing=self.default_pacing,
                 normalization_guidance=self.normalization_guidance,
+            ),
+            "prose_structure": ProseStructureConfig(
+                opener_monotony_threshold=self.opener_monotony_threshold,
+                length_cv_threshold=self.length_cv_threshold,
+                passive_ratio_threshold=self.passive_ratio_threshold,
+                dep_distance_std_threshold=self.dep_distance_std_threshold,
+            ),
+            "vocabulary": VocabularyConfig(
+                mtld_threshold=self.mtld_threshold,
+                zipf_threshold=self.zipf_threshold,
+                mattr_window=self.mattr_window,
             ),
         }
