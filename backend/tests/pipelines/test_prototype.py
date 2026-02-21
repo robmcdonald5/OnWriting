@@ -71,11 +71,11 @@ class TestConditionalEdges:
                 _make_feedback(
                     "s1",
                     approved=True,
-                    style_adherence=3,
-                    character_voice=3,
-                    outline_adherence=3,
-                    pacing=2,
-                    prose_quality=2,
+                    style_adherence=4,
+                    character_voice=4,
+                    outline_adherence=4,
+                    pacing=3,
+                    prose_quality=3,
                 )
             ],
             "revision_count": 0,
@@ -92,11 +92,11 @@ class TestConditionalEdges:
                 _make_feedback(
                     "s1",
                     approved=True,
-                    style_adherence=3,
-                    character_voice=3,
-                    outline_adherence=3,
-                    pacing=3,
-                    prose_quality=3,
+                    style_adherence=4,
+                    character_voice=4,
+                    outline_adherence=4,
+                    pacing=4,
+                    prose_quality=4,
                 )
             ],
             "revision_count": 0,
@@ -119,14 +119,14 @@ class TestConditionalEdges:
         }
         assert should_revise_or_advance(state) == "next_scene"
 
-    def test_all_threes_approves(self):
-        """All dimensions at 3 with clean deterministic checks → approve."""
+    def test_all_fours_approves(self):
+        """All dimensions at 4 with clean deterministic checks → approve."""
         rubric = SceneRubric(
-            style_adherence=3,
-            character_voice=3,
-            outline_adherence=3,
-            pacing=3,
-            prose_quality=3,
+            style_adherence=4,
+            character_voice=4,
+            outline_adherence=4,
+            pacing=4,
+            prose_quality=4,
         )
         fb = EditFeedback(
             scene_id="s1",
@@ -143,6 +143,24 @@ class TestConditionalEdges:
             "story_outline": _one_scene_outline(),
         }
         assert should_revise_or_advance(state) == "complete"
+
+    def test_all_threes_does_not_approve(self):
+        """All-3s on 1-4 scale = 0.67, below 0.7 threshold → revision."""
+        rubric = SceneRubric(
+            style_adherence=3,
+            character_voice=3,
+            outline_adherence=3,
+            pacing=3,
+            prose_quality=3,
+        )
+        fb = EditFeedback(
+            scene_id="s1",
+            quality_score=rubric.compute_quality_score(),
+            approved=rubric.compute_approved(),
+            rubric=rubric,
+        )
+        assert fb.quality_score == 0.67
+        assert fb.approved is False
 
     def test_above_threshold_but_critical_failure_revises(self):
         """High average but one dimension at 1 → floor check triggers revision."""
@@ -193,8 +211,170 @@ class TestConditionalEdges:
             "current_scene_index": 0,
             "story_outline": _one_scene_outline(),
         }
-        assert fb.quality_score == 0.5
+        assert fb.quality_score == 0.33
         assert fb.approved is False
+        assert should_revise_or_advance(state) == "revise"
+
+
+class TestMinRevisions:
+    """Tests for the guaranteed minimum editing pass feature."""
+
+    def test_force_revise_when_below_min_revisions(self):
+        """Approved draft with revision_count=0, min=1 → force "revise"."""
+        state: GraphState = {
+            "user_prompt": "test",
+            "edit_feedback": [
+                _make_feedback(
+                    "s1",
+                    approved=True,
+                    style_adherence=4,
+                    character_voice=4,
+                    outline_adherence=4,
+                    pacing=4,
+                    prose_quality=4,
+                )
+            ],
+            "revision_count": 0,
+            "max_revisions": 2,
+            "min_revisions": 1,
+            "current_scene_index": 0,
+            "story_outline": _one_scene_outline(),
+        }
+        assert should_revise_or_advance(state) == "revise"
+
+    def test_normal_logic_after_min_revisions_met(self):
+        """Approved draft with revision_count=1, min=1 → "complete"."""
+        state: GraphState = {
+            "user_prompt": "test",
+            "edit_feedback": [
+                _make_feedback(
+                    "s1",
+                    approved=True,
+                    style_adherence=4,
+                    character_voice=4,
+                    outline_adherence=4,
+                    pacing=4,
+                    prose_quality=4,
+                )
+            ],
+            "revision_count": 1,
+            "max_revisions": 2,
+            "min_revisions": 1,
+            "current_scene_index": 0,
+            "story_outline": _one_scene_outline(),
+        }
+        assert should_revise_or_advance(state) == "complete"
+
+    def test_min_revisions_zero_matches_old_behavior(self):
+        """min=0, approved → "complete" (backward compat)."""
+        state: GraphState = {
+            "user_prompt": "test",
+            "edit_feedback": [
+                _make_feedback(
+                    "s1",
+                    approved=True,
+                    style_adherence=4,
+                    character_voice=4,
+                    outline_adherence=4,
+                    pacing=4,
+                    prose_quality=4,
+                )
+            ],
+            "revision_count": 0,
+            "max_revisions": 2,
+            "min_revisions": 0,
+            "current_scene_index": 0,
+            "story_outline": _one_scene_outline(),
+        }
+        assert should_revise_or_advance(state) == "complete"
+
+    def test_min_revisions_default_is_zero_in_state(self):
+        """min not set in state, approved → "complete" (backward compat)."""
+        state: GraphState = {
+            "user_prompt": "test",
+            "edit_feedback": [
+                _make_feedback(
+                    "s1",
+                    approved=True,
+                    style_adherence=4,
+                    character_voice=4,
+                    outline_adherence=4,
+                    pacing=4,
+                    prose_quality=4,
+                )
+            ],
+            "revision_count": 0,
+            "max_revisions": 2,
+            "current_scene_index": 0,
+            "story_outline": _one_scene_outline(),
+        }
+        # min_revisions intentionally omitted — defaults to 0
+        assert should_revise_or_advance(state) == "complete"
+
+    def test_min_revisions_with_failing_score_still_revises(self):
+        """Not approved + below min → "revise" (both reasons agree)."""
+        state: GraphState = {
+            "user_prompt": "test",
+            "edit_feedback": [
+                _make_feedback("s1", approved=False, style_adherence=2, pacing=1)
+            ],
+            "revision_count": 0,
+            "max_revisions": 2,
+            "min_revisions": 1,
+            "current_scene_index": 0,
+            "story_outline": _one_scene_outline(),
+        }
+        assert should_revise_or_advance(state) == "revise"
+
+    def test_min_revisions_equals_max_revisions(self):
+        """min=2, max=2: count=1 → "revise"; count=2 → "complete"."""
+        base_state: GraphState = {
+            "user_prompt": "test",
+            "edit_feedback": [
+                _make_feedback(
+                    "s1",
+                    approved=True,
+                    style_adherence=4,
+                    character_voice=4,
+                    outline_adherence=4,
+                    pacing=4,
+                    prose_quality=4,
+                )
+            ],
+            "max_revisions": 2,
+            "min_revisions": 2,
+            "current_scene_index": 0,
+            "story_outline": _one_scene_outline(),
+        }
+        # count=1, still below min → revise
+        state_1 = {**base_state, "revision_count": 1}
+        assert should_revise_or_advance(state_1) == "revise"
+
+        # count=2, min met and max reached → complete
+        state_2 = {**base_state, "revision_count": 2}
+        assert should_revise_or_advance(state_2) == "complete"
+
+    def test_force_revise_next_scene_scenario(self):
+        """Approved, 2 scenes, min=1, count=0 → "revise" (not "next_scene")."""
+        state: GraphState = {
+            "user_prompt": "test",
+            "edit_feedback": [
+                _make_feedback(
+                    "s1",
+                    approved=True,
+                    style_adherence=4,
+                    character_voice=4,
+                    outline_adherence=4,
+                    pacing=4,
+                    prose_quality=4,
+                )
+            ],
+            "revision_count": 0,
+            "max_revisions": 2,
+            "min_revisions": 1,
+            "current_scene_index": 0,
+            "story_outline": _two_scene_outline(),
+        }
         assert should_revise_or_advance(state) == "revise"
 
 

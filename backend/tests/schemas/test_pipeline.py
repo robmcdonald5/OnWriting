@@ -77,4 +77,5 @@ class TestPipelineState:
         assert state.current_scene_index == 0
         assert state.revision_count == 0
         assert state.max_revisions == 2
+        assert state.min_revisions == 1
         assert state.errors == []
