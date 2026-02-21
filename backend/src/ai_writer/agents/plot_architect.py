@@ -1,10 +1,12 @@
 """Plot Architect agent — combines Architect + Casting Director + Lore Master.
 
 Three sequential LLM calls with planning_temperature (0.3):
-1. User prompt → StoryBrief
-2. StoryBrief → CharacterRoster
-3. StoryBrief → WorldContext
+1. User prompt -> StoryBrief
+2. StoryBrief -> CharacterRoster
+3. StoryBrief -> WorldContext
 """
+
+import logging
 
 from ai_writer.agents.base import get_structured_llm, invoke
 from ai_writer.config import get_settings
@@ -22,9 +24,11 @@ from ai_writer.schemas.characters import CharacterRoster
 from ai_writer.schemas.story import StoryBrief
 from ai_writer.schemas.world import WorldContext
 
+logger = logging.getLogger("ai_writer.agents.plot_architect")
+
 
 def run_plot_architect(state: dict) -> dict:
-    """Execute the Plot Architect agent: user_prompt → StoryBrief + CharacterRoster + WorldContext."""
+    """Execute the Plot Architect agent: user_prompt -> StoryBrief + CharacterRoster + WorldContext."""
     settings = get_settings()
     temp = settings.planning_temperature
     user_prompt = state["user_prompt"]
@@ -35,7 +39,7 @@ def run_plot_architect(state: dict) -> dict:
     world_config = configs.get("world_context", WorldContextPromptConfig())
 
     # 1. Generate StoryBrief
-    print("  [Plot Architect] Generating story brief...", flush=True)
+    logger.info("Generating story brief...")
     brief_llm = get_structured_llm(StoryBrief, temperature=temp)
     story_brief = invoke(
         brief_llm,
@@ -46,8 +50,8 @@ def run_plot_architect(state: dict) -> dict:
     )
 
     # 2. Generate CharacterRoster
-    print(f'  [Plot Architect] Brief done: "{story_brief.title}"', flush=True)
-    print("  [Plot Architect] Generating character roster...", flush=True)
+    logger.info('Brief done: "%s"', story_brief.title)
+    logger.info("Generating character roster...")
     roster_llm = get_structured_llm(CharacterRoster, temperature=temp)
     character_roster = invoke(
         roster_llm,
@@ -61,11 +65,8 @@ def run_plot_architect(state: dict) -> dict:
     )
 
     # 3. Generate WorldContext
-    print(
-        f"  [Plot Architect] Roster done: {len(character_roster.characters)} characters",
-        flush=True,
-    )
-    print("  [Plot Architect] Generating world context...", flush=True)
+    logger.info("Roster done: %d characters", len(character_roster.characters))
+    logger.info("Generating world context...")
     world_llm = get_structured_llm(WorldContext, temperature=temp)
     world_context = invoke(
         world_llm,
@@ -78,9 +79,10 @@ def run_plot_architect(state: dict) -> dict:
         ],
     )
 
-    print(
-        f"  [Plot Architect] World done: {len(world_context.locations)} locations, {len(world_context.rules)} rules",
-        flush=True,
+    logger.info(
+        "World done: %d locations, %d rules",
+        len(world_context.locations),
+        len(world_context.rules),
     )
 
     return {
