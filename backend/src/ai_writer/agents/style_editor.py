@@ -7,25 +7,34 @@ Layer 3: Algorithmic composite score (Python) — weighted average + floor check
 Uses low temperature (0.1) for deterministic evaluation per LLM-as-judge research.
 """
 
+import logging
+
 from ai_writer.agents.base import get_structured_llm, invoke
 from ai_writer.prompts.builders import build_style_editor_prompt
 from ai_writer.prompts.configs import (
     ProseStructureConfig,
+    ScoreCapConfig,
+    SlopConfig,
     StyleEditorPromptConfig,
     VocabularyConfig,
 )
 from ai_writer.schemas.editing import (
     EditFeedback,
+    SceneMetrics,
     SceneRubric,
     StyleEditorOutput,
 )
 from ai_writer.utils.text_analysis import (
+    build_story_allowlist,
     check_tense_consistency,
     check_word_count,
     compute_prose_structure,
     compute_slop_score,
     compute_vocabulary_metrics,
+    detect_cross_scene_repetition,
 )
+
+logger = logging.getLogger("ai_writer.agents.style_editor")
 
 # Evaluation temperature — lower than creative agents for consistency
 _EVAL_TEMPERATURE = 0.1
@@ -53,43 +62,47 @@ def run_style_editor(state: dict) -> dict:
     )
 
     prose = latest_draft.prose
+    configs = state.get("prompt_configs", {})
 
     # ── Layer 1: Deterministic checks (zero LLM cost) ──
 
+    allowlist = build_story_allowlist(state)
+    slop_config = configs.get("slop", SlopConfig())
+
     wc_result = check_word_count(prose, scene_outline.target_word_count)
     tense_result = check_tense_consistency(prose)
-    slop_result = compute_slop_score(prose)
+    slop_result = compute_slop_score(prose, allowlist=allowlist, config=slop_config)
 
-    print(
-        f"  [Style Editor] Deterministic checks for {latest_draft.scene_id}:",
-        flush=True,
-    )
+    logger.info("Deterministic checks for %s:", latest_draft.scene_id)
     wc_status = "OK" if wc_result.within_tolerance else "OUT OF RANGE"
-    print(
-        f"    word_count: {wc_status} ({wc_result.actual}/{wc_result.target})",
-        flush=True,
+    logger.info(
+        "  word_count: %s (%d/%d)", wc_status, wc_result.actual, wc_result.target
     )
-    print(
-        f"    tense: {tense_result.dominant_tense} "
-        f"({'consistent' if tense_result.consistent else 'INCONSISTENT'})",
-        flush=True,
+    logger.info(
+        "  tense: %s (%s)",
+        tense_result.dominant_tense,
+        "consistent" if tense_result.consistent else "INCONSISTENT",
     )
-    print(f"    slop: {slop_result.slop_ratio:.2f}", flush=True)
+    logger.info("  slop: %.2f", slop_result.slop_ratio)
     if slop_result.found_phrases:
-        print(f"    slop phrases: {slop_result.found_phrases[:5]}", flush=True)
+        logger.info("  slop phrases: %s", slop_result.found_phrases[:5])
+    if slop_result.found_words:
+        top_words = sorted(
+            slop_result.found_words.items(), key=lambda x: x[1], reverse=True
+        )[:5]
+        logger.info("  slop words (excess): %s", top_words)
 
     # Structural analysis
-    configs = state.get("prompt_configs", {})
     structure_config = configs.get("prose_structure", ProseStructureConfig())
     structure_result = compute_prose_structure(prose, structure_config)
 
     structure_flags = structure_result.summary_lines()
     if structure_flags:
-        print("    structural flags:", flush=True)
+        logger.info("  structural flags:")
         for flag in structure_flags:
-            print(f"      - {flag}", flush=True)
+            logger.info("    - %s", flag)
     else:
-        print("    structure: OK", flush=True)
+        logger.info("  structure: OK")
 
     # Vocabulary analysis
     vocab_config = configs.get("vocabulary", VocabularyConfig())
@@ -97,11 +110,17 @@ def run_style_editor(state: dict) -> dict:
 
     vocab_flags = vocab_result.summary_lines()
     if vocab_flags:
-        print("    vocabulary flags:", flush=True)
+        logger.info("  vocabulary flags:")
         for flag in vocab_flags:
-            print(f"      - {flag}", flush=True)
+            logger.info("    - %s", flag)
     else:
-        print("    vocabulary: OK", flush=True)
+        logger.info("  vocabulary: OK")
+
+    # Cross-scene repetition detection
+    prior_proses = [d.prose for d in scene_drafts[:-1]]
+    repetition_result = detect_cross_scene_repetition(prose, prior_proses)
+    if repetition_result.repeated_count > 0:
+        logger.info("  cross-scene repetitions: %d", repetition_result.repeated_count)
 
     # ── Layer 2: LLM evaluation (1 structured call) ──
 
@@ -143,7 +162,15 @@ def run_style_editor(state: dict) -> dict:
             "or a generic LLM-ism that weakens the prose:\n"
         )
         for phrase in slop_result.found_phrases:
-            eval_context += f'- "{phrase}"\n'
+            eval_context += f"- {phrase}\n"
+
+    if slop_result.found_words:
+        eval_context += "\n## Overused Words (automated)\n"
+        top_words = sorted(
+            slop_result.found_words.items(), key=lambda x: x[1], reverse=True
+        )[:10]
+        for word, excess in top_words:
+            eval_context += f'- "{word}" ({excess} excess occurrence(s))\n'
 
     # Inject structural analysis as advisory context
     if structure_flags:
@@ -157,10 +184,62 @@ def run_style_editor(state: dict) -> dict:
         for flag in vocab_flags:
             eval_context += f"- {flag}\n"
 
-    print(
-        f"  [Style Editor] Evaluating scene {latest_draft.scene_id}...",
-        flush=True,
+    # Inject cross-scene repetition
+    if repetition_result.repeated_phrases:
+        eval_context += "\n## Cross-Scene Repetitions (automated)\n"
+        eval_context += (
+            "These multi-word phrases appear in both this scene and prior scenes:\n"
+        )
+        for phrase in repetition_result.repeated_phrases:
+            eval_context += f'- "{phrase}"\n'
+
+    # ── Deterministic criteria pre-evaluation ──
+    # Tell the LLM which atomic criteria already passed/failed
+    eval_context += "\n## Pre-Evaluated Criteria (deterministic)\n"
+    eval_context += "These criteria have been evaluated automatically. "
+    eval_context += "You CANNOT override these results.\n\n"
+
+    # Pacing criteria (a) and (b)
+    pacing_cv_pass = (
+        structure_result.sent_length_cv > structure_config.length_cv_threshold
     )
+    pacing_opener_pass = not structure_result.opener_monotony
+    eval_context += "### Pacing\n"
+    eval_context += (
+        f"(a) Sentence length variety (CV > {structure_config.length_cv_threshold}): "
+        f"{'PASS' if pacing_cv_pass else 'FAIL'} "
+        f"(CV = {structure_result.sent_length_cv:.2f})\n"
+    )
+    eval_context += (
+        f"(b) Opener variety (no type > {structure_config.opener_monotony_threshold:.0%}): "
+        f"{'PASS' if pacing_opener_pass else 'FAIL'} "
+        f"(top opener = {structure_result.top_opener_ratio:.0%})\n"
+    )
+
+    # Prose Quality criteria (a) and (b)
+    # Note: confirmed_slop count is determined after LLM call, so we
+    # pre-evaluate based on the flagged phrases count as a proxy.
+    # The actual cap is applied post-LLM via ScoreCapConfig.
+    prose_slop_pass = not slop_result.found_phrases
+    prose_vocab_pass = not vocab_result.vocabulary_basic
+    eval_context += "\n### Prose Quality\n"
+    eval_context += (
+        f"(a) Zero confirmed AI-isms: "
+        f"{'PASS (no phrases flagged)' if prose_slop_pass else 'PENDING — you must evaluate flagged phrases above'}\n"
+    )
+    eval_context += (
+        f"(b) Vocabulary not basic: " f"{'PASS' if prose_vocab_pass else 'FAIL'}\n"
+    )
+
+    # Outline Adherence criterion (a)
+    eval_context += "\n### Outline Adherence\n"
+    eval_context += (
+        f"(a) Word count within tolerance: "
+        f"{'PASS' if wc_result.within_tolerance else 'FAIL'} "
+        f"({wc_result.actual}/{wc_result.target} words)\n"
+    )
+
+    logger.info("Evaluating scene %s...", latest_draft.scene_id)
 
     feedback_llm = get_structured_llm(StyleEditorOutput, temperature=_EVAL_TEMPERATURE)
     raw_output = invoke(
@@ -174,6 +253,40 @@ def run_style_editor(state: dict) -> dict:
         ],
     )
     llm_output: StyleEditorOutput = raw_output  # type: ignore[assignment]
+
+    # ── Deterministic score caps ──
+    # Apply hard caps based on automated analysis. The LLM provides baseline
+    # scores and reasoning, but Python enforces constraints the LLM may ignore.
+    cap_config = configs.get("score_caps", ScoreCapConfig())
+
+    capped_pacing = llm_output.pacing
+    if structure_result.opener_monotony or structure_result.length_monotony:
+        capped_pacing = min(capped_pacing, cap_config.cap_pacing_on_monotony)
+        if capped_pacing < llm_output.pacing:
+            logger.info(
+                "Score cap: pacing %d -> %d (structural monotony)",
+                llm_output.pacing,
+                capped_pacing,
+            )
+
+    capped_prose = llm_output.prose_quality
+    if len(llm_output.confirmed_slop) >= cap_config.cap_prose_on_slop_count:
+        capped_prose = min(capped_prose, cap_config.cap_prose_on_slop_value)
+        if capped_prose < llm_output.prose_quality:
+            logger.info(
+                "Score cap: prose_quality %d -> %d (%d confirmed AI-isms)",
+                llm_output.prose_quality,
+                capped_prose,
+                len(llm_output.confirmed_slop),
+            )
+    if vocab_result.low_diversity:
+        capped_prose = min(capped_prose, cap_config.cap_prose_on_low_diversity)
+        if capped_prose < llm_output.prose_quality:
+            logger.info(
+                "Score cap: prose_quality %d -> %d (low vocabulary diversity)",
+                llm_output.prose_quality,
+                capped_prose,
+            )
 
     # ── Layer 3: Algorithmic composite score (Python) ──
 
@@ -190,12 +303,14 @@ def run_style_editor(state: dict) -> dict:
         # Vocabulary analysis (advisory)
         low_diversity=vocab_result.low_diversity,
         vocabulary_basic=vocab_result.vocabulary_basic,
-        # LLM dimensions
+        # Cross-scene
+        cross_scene_repetitions=repetition_result.repeated_count,
+        # LLM dimensions (with deterministic caps applied)
         style_adherence=llm_output.style_adherence,
         character_voice=llm_output.character_voice,
         outline_adherence=llm_output.outline_adherence,
-        pacing=llm_output.pacing,
-        prose_quality=llm_output.prose_quality,
+        pacing=capped_pacing,
+        prose_quality=capped_prose,
         dimension_reasoning=llm_output.dimension_reasoning,
     )
 
@@ -208,19 +323,40 @@ def run_style_editor(state: dict) -> dict:
         approved=approved,
         overall_assessment=llm_output.overall_assessment,
         revision_instructions=llm_output.revision_instructions,
+        confirmed_slop=llm_output.confirmed_slop,
         rubric=rubric,
     )
 
     status = "APPROVED" if approved else "NEEDS REVISION"
-    print(
-        f"  [Style Editor] Score: {quality_score:.2f} [{status}]",
-        flush=True,
-    )
-    print(f"    {rubric.dimension_summary()}", flush=True)
+    logger.info("Score: %.2f [%s]", quality_score, status)
+    logger.info("  %s", rubric.dimension_summary())
     if rubric.has_critical_failure():
-        print("    ** CRITICAL FAILURE on one or more dimensions **", flush=True)
+        logger.warning("CRITICAL FAILURE on one or more dimensions")
+
+    # Record scene metrics for trend tracking
+    metrics = SceneMetrics(
+        scene_id=latest_draft.scene_id,
+        slop_ratio=slop_result.slop_ratio,
+        mtld=vocab_result.mtld,
+        opener_ratio=structure_result.top_opener_ratio,
+        sent_length_cv=structure_result.sent_length_cv,
+        word_count=latest_draft.word_count,
+    )
+    scene_metrics = list(state.get("scene_metrics", []))
+
+    # Trend warning: MTLD regression
+    if scene_metrics:
+        mean_mtld = sum(m.mtld for m in scene_metrics) / len(scene_metrics)
+        if mean_mtld > 0 and metrics.mtld < mean_mtld * 0.8:
+            logger.warning(
+                "Quality regression: MTLD dropped from %.0f to %.0f",
+                mean_mtld,
+                metrics.mtld,
+            )
+
+    scene_metrics.append(metrics)
 
     feedback_list = list(state.get("edit_feedback", []))
     feedback_list.append(edit_feedback)
 
-    return {"edit_feedback": feedback_list}
+    return {"edit_feedback": feedback_list, "scene_metrics": scene_metrics}
