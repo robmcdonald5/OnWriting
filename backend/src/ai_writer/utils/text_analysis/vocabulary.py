@@ -6,7 +6,36 @@ Uses three lightweight pure-Python libraries:
 - textstat: Readability formulas (Flesch, Gunning-Fog)
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from lexicalrichness import LexicalRichness  # type: ignore[import-untyped]
+    from textstat import textstat as ts  # type: ignore[import-untyped]
+    from wordfreq import zipf_frequency  # type: ignore[import-untyped]
+
+try:
+    from lexicalrichness import LexicalRichness  # type: ignore[import-untyped]
+
+    _HAS_LEXICALRICHNESS = True
+except ImportError:
+    _HAS_LEXICALRICHNESS = False
+
+try:
+    from wordfreq import zipf_frequency  # type: ignore[import-untyped]
+
+    _HAS_WORDFREQ = True
+except ImportError:
+    _HAS_WORDFREQ = False
+
+try:
+    from textstat import textstat as ts  # type: ignore[import-untyped]
+
+    _HAS_TEXTSTAT = True
+except ImportError:
+    _HAS_TEXTSTAT = False
 
 from ai_writer.prompts.configs import VocabularyConfig
 
@@ -60,36 +89,38 @@ def compute_vocabulary_metrics(
         return VocabularyResult()
 
     # --- Lexical diversity (lexicalrichness) ---
-    from lexicalrichness import LexicalRichness  # type: ignore[import-untyped]
+    if _HAS_LEXICALRICHNESS:
+        lex = LexicalRichness(prose)
 
-    lex = LexicalRichness(prose)
+        try:
+            mtld = lex.mtld(threshold=0.72)
+        except ZeroDivisionError:
+            mtld = 0.0
 
-    try:
-        mtld = lex.mtld(threshold=0.72)
-    except ZeroDivisionError:
+        try:
+            mattr = lex.mattr(window_size=min(config.mattr_window, len(words)))
+        except ZeroDivisionError:
+            mattr = 0.0
+    else:
         mtld = 0.0
-
-    try:
-        mattr = lex.mattr(window_size=min(config.mattr_window, len(words)))
-    except ZeroDivisionError:
         mattr = 0.0
 
     # --- Vocabulary sophistication (wordfreq) ---
-    from wordfreq import zipf_frequency  # type: ignore[import-untyped]
-
     # Only score content words (skip short function words)
     content_words = [w.lower() for w in words if len(w) > 3 and w.isalpha()]
-    if content_words:
+    if _HAS_WORDFREQ and content_words:
         zipf_scores = [zipf_frequency(w, "en") for w in content_words]
         avg_zipf = sum(zipf_scores) / len(zipf_scores)
     else:
         avg_zipf = 0.0
 
     # --- Readability (textstat) ---
-    from textstat import textstat as ts  # type: ignore[import-untyped]
-
-    flesch = ts.flesch_reading_ease(prose)
-    fog = ts.gunning_fog(prose)
+    if _HAS_TEXTSTAT:
+        flesch = ts.flesch_reading_ease(prose)
+        fog = ts.gunning_fog(prose)
+    else:
+        flesch = 0.0
+        fog = 0.0
 
     return VocabularyResult(
         mtld=round(mtld, 1),
