@@ -114,45 +114,99 @@ Guidelines:
 EVALUATION_RUBRIC = """\
 ## Evaluation Process
 
-For EACH dimension, you MUST:
-1. Cite 2-3 specific phrases from the text as evidence
-2. Explain how they support your score
-3. Then assign your 1-3 score
-
 {normalization_guidance}
 
-## Rubric (1-3 scale)
+For EACH dimension below, you MUST:
+1. Cite 2-3 specific phrases from the text as evidence
+2. Explain how they support your assessment
+3. Write your full reasoning in dimension_reasoning BEFORE assigning scores
 
-### Style Adherence
-- 1 (Low): Prose contradicts 2+ tone axes (formality={formality}, darkness={darkness}, humor={humor}, pacing={pacing})
-- 2 (Medium): Matches most tone axes, minor mismatches
-- 3 (High): All tone axes reflected naturally in prose
+Some criteria are pre-evaluated by automated analysis (marked [AUTO-PASS] or
+[AUTO-FAIL] in the evaluation context). You cannot override these — they are
+mechanically determined. Score only the LLM-judged criteria yourself.
 
-### Character Voice
-- 1 (Low): Characters sound interchangeable, generic dialogue
-- 2 (Medium): Some distinction between characters, occasional drift
-- 3 (High): Each character unmistakably voiced per their voice_notes
+## Rubric (1-4 scale, atomic criteria)
 
-### Outline Adherence
-- 1 (Low): Missing opening_hook OR closing_image OR >1 dialogue beat
-- 2 (Medium): All structural elements present, minor deviations from outline
-- 3 (High): opening_hook, closing_image, and all key_dialogue_beats executed precisely
+Each dimension has 4 binary criteria. The dimension score = number of criteria met.
 
-### Pacing
-- 1 (Low): Monotonous rhythm, no sentence variety, flat emotional arc
-- 2 (Medium): Some rhythm variation, emotional arc partially achieved
-- 3 (High): Dynamic sentence lengths serving emotional beats, arc fully realized
+### Pacing (4 criteria)
+- 4: All 4 criteria met — exceptional rhythmic variety serving every beat
+- 3: 3 criteria met — competent pacing with one weakness
+- 2: 2 criteria met — noticeable pacing problems
+- 1: 0-1 criteria met — flat, monotonous pacing
 
-### Prose Quality
-- 1 (Low): Heavy AI-isms (delve, tapestry, testament to, etc.), telling over showing
-- 2 (Medium): Mostly clean prose, some generic phrasing
-- 3 (High): Vivid, specific language; show-don't-tell throughout; original imagery
+Criteria:
+(a) [DETERMINISTIC] Sentence length variety: CV > 0.4 — see evaluation context
+(b) [DETERMINISTIC] Opener variety: no single opener type > 35% — see evaluation context
+(c) [LLM] The emotional arc described in the outline is realized in the prose
+(d) [LLM] Pacing shifts are present — tension/release rhythm varies across the scene
 
-## Important Notes
-- Flag any overused AI phrases (delve, tapestry, testament to, myriad, embark, navigate, multifaceted, pivotal, gossamer, iridescent, luminous, etc.) under prose_quality
-- If prose_quality has AI-isms, it cannot score above 2
-- Write revision_instructions ONLY if quality is insufficient — focus on the lowest-scoring dimensions
-- In revision_instructions, be specific: quote the problematic text and suggest concrete improvements"""
+### Prose Quality (4 criteria)
+- 4: All 4 criteria met — vivid, original, zero AI-isms
+- 3: 3 criteria met — mostly strong prose with one weakness
+- 2: 2 criteria met — noticeable prose problems
+- 1: 0-1 criteria met — generic, AI-heavy prose
+
+Criteria:
+(a) [DETERMINISTIC] Zero confirmed AI-isms present — see evaluation context
+(b) [DETERMINISTIC] Vocabulary not flagged as basic — see evaluation context
+(c) [LLM] Sensory/concrete detail used rather than abstract telling
+(d) [LLM] Imagery is original, not cliché or stock phrases
+
+### Style Adherence (4 criteria)
+- 4: All 4 criteria met — every tone axis reflected naturally
+- 3: 3 criteria met — mostly on-tone with one axis off
+- 2: 2 criteria met — noticeable tone mismatches
+- 1: 0-1 criteria met — prose contradicts the intended tone
+
+Criteria (all LLM-judged):
+(a) Prose matches the formality axis ({formality})
+(b) Prose matches the darkness axis ({darkness})
+(c) Prose matches the humor axis ({humor})
+(d) Prose matches the pacing/tension axis ({pacing})
+
+### Character Voice (4 criteria)
+- 4: All 4 criteria met — each character unmistakably voiced
+- 3: 3 criteria met — mostly distinct voices with one weakness
+- 2: 2 criteria met — noticeable voice problems
+- 1: 0-1 criteria met — characters are interchangeable
+
+Criteria (all LLM-judged):
+(a) Protagonist has a distinct voice matching their voice_notes
+(b) Dialogue sounds natural, not exposition dumps
+(c) Characters are distinguishable from each other in speech
+(d) Speech patterns match character profiles
+
+### Outline Adherence (4 criteria)
+- 4: All 4 criteria met — every structural element executed precisely
+- 3: 3 criteria met — mostly adherent with one minor deviation
+- 2: 2 criteria met — significant structural gaps
+- 1: 0-1 criteria met — outline largely ignored
+
+Criteria:
+(a) [DETERMINISTIC] Word count within tolerance — see evaluation context
+(b) [LLM] opening_hook is executed as described in the outline
+(c) [LLM] closing_image is executed as described in the outline
+(d) [LLM] All key_dialogue_beats are present in the prose
+
+## Automated Analysis Integration
+
+You will receive automated analysis sections (Flagged Phrases, Overused Words,
+Structural Analysis, Vocabulary Analysis, Cross-Scene Repetitions) appended to
+the scene context.
+
+1. For Flagged Phrases: In dimension_reasoning, state which flagged phrases are
+   genuine AI-isms vs. contextually appropriate. Add confirmed AI-isms to the
+   confirmed_slop field (exact quotes).
+
+2. For Structural/Vocabulary Flags: Address these in your dimension_reasoning.
+   Note: score caps for structural and vocabulary issues are applied
+   automatically by the system after your evaluation.
+
+3. In revision_instructions: For EACH confirmed issue, quote the specific text
+   and suggest a concrete replacement. Use format:
+   REPLACE: "original phrase" -> suggested alternative
+   VARY: [description of structural pattern to break]"""
 
 # ── Component 5: Closing Motivations ────────────────────────────────
 # Present in 5 of 6 prompts (all except Style Editor).
@@ -185,5 +239,45 @@ This is revision #{revision_count}.
 {revision_instructions}
 
 {focus_dimensions}
-Address the editor's concerns while preserving what works. Focus especially on
-the lowest-scoring dimensions listed above."""
+
+### Confirmed AI-isms to Replace
+{confirmed_slop_section}
+
+### Structural Issues to Address
+{structural_issues_section}
+
+Address ALL items above. For confirmed AI-isms, replace each quoted phrase with
+something more specific and original. For structural issues, actively vary your
+sentence patterns."""
+
+# ── Conditional: Polish Addendum (Scene Writer only) ──────────────
+# Appended when revision_count > 0 but draft was already approved
+# (i.e., forced revision via min_revisions). Lighter framing to
+# prevent over-correction of an already-passing draft.
+
+POLISH_ADDENDUM = """
+
+## POLISH PASS
+This draft was approved (score: {quality_score}). This is a refinement pass,
+not a rewrite.
+
+IMPORTANT: Preserve the strengths of this draft. Make targeted improvements
+only where specific issues are identified below. Do NOT rewrite passages that
+are working well.
+
+### Current Scores
+{dimension_breakdown}
+
+### Editor Suggestions
+{revision_instructions}
+
+{focus_dimensions}
+
+### Confirmed AI-isms to Replace
+{confirmed_slop_section}
+
+### Structural Refinements
+{structural_issues_section}
+
+Make only targeted changes. If a section says "None identified," leave that
+aspect of the prose untouched."""

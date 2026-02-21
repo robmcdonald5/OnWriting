@@ -22,6 +22,7 @@ Usage:
         "user_prompt": prompt,
         "prompt_configs": config.to_prompt_configs(),
         "max_revisions": config.max_revisions,
+        "min_revisions": config.min_revisions,
         ...
     })
 """
@@ -92,6 +93,15 @@ class SceneWriterPromptConfig(BaseModel):
     )
 
 
+class SlopConfig(BaseModel):
+    """Scoring parameters for slop detection."""
+
+    phrase_penalty_scale: float = 10.0  # multiplier in ratio formula
+    word_excess_weight: float = 0.3  # penalty per excess word occurrence
+    word_min_severity: float = 0.5  # minimum severity for word-level scan
+    word_free_occurrences: int = 1  # free occurrences before penalty
+
+
 class ProseStructureConfig(BaseModel):
     """Thresholds for structural monotony detection."""
 
@@ -109,6 +119,36 @@ class VocabularyConfig(BaseModel):
     mattr_window: int = 50
 
 
+class ScoreCapConfig(BaseModel):
+    """Deterministic score caps applied after LLM scoring.
+
+    When automated metrics fail thresholds, Python hard-caps the LLM score
+    rather than relying on advisory language the LLM may ignore.
+    """
+
+    cap_pacing_on_monotony: int = 2
+    cap_prose_on_slop_count: int = 3  # threshold: confirmed_slop >= this
+    cap_prose_on_slop_value: int = 2  # cap to this value
+    cap_prose_on_low_diversity: int = 3
+
+
+class AdvisoryPenaltyConfig(BaseModel):
+    """Soft penalty values for advisory metrics in compute_quality_score().
+
+    Calibrated for the 1-4 normalization range. Max structural: 0.12,
+    max vocabulary: 0.06, max cross-scene: 0.06. Total max: 0.24.
+    """
+
+    opener_monotony: float = 0.04
+    length_monotony: float = 0.04
+    passive_heavy: float = 0.02
+    structural_monotony: float = 0.02
+    low_diversity: float = 0.04
+    vocabulary_basic: float = 0.02
+    cross_scene_per: float = 0.02
+    cross_scene_max: int = 3
+
+
 class StyleEditorPromptConfig(BaseModel):
     """Variables for Style Editor system prompt.
 
@@ -121,8 +161,10 @@ class StyleEditorPromptConfig(BaseModel):
     humor: float = 0.3
     pacing: float = 0.5
     normalization_guidance: str = (
-        "A first draft typically scores 1-2 on most dimensions. "
-        "Score 3 only for genuinely excellent execution."
+        "Score STRICTLY. A score of 3 means 'competent but with clear "
+        "weaknesses' — this is the expected score for a typical first draft. "
+        "Score 4 ONLY when the criterion is met with zero weaknesses. "
+        "Most first drafts should score 2-3 on most dimensions."
     )
 
 
@@ -157,9 +199,27 @@ class PrototypeConfig(BaseModel):
 
     # ── Editor Calibration ───────────────────────────────────────────
     normalization_guidance: str = (
-        "A first draft typically scores 1-2 on most dimensions. "
-        "Score 3 only for genuinely excellent execution."
+        "Score STRICTLY. A score of 3 means 'competent but with clear "
+        "weaknesses' — this is the expected score for a typical first draft. "
+        "Score 4 ONLY when the criterion is met with zero weaknesses. "
+        "Most first drafts should score 2-3 on most dimensions."
     )
+
+    # ── Score Caps (deterministic overrides after LLM scoring) ──────
+    cap_pacing_on_monotony: int = 2
+    cap_prose_on_slop_count: int = 3
+    cap_prose_on_slop_value: int = 2
+    cap_prose_on_low_diversity: int = 3
+
+    # ── Advisory Penalty Values ─────────────────────────────────────
+    penalty_opener_monotony: float = 0.04
+    penalty_length_monotony: float = 0.04
+    penalty_passive_heavy: float = 0.02
+    penalty_structural_monotony: float = 0.02
+    penalty_low_diversity: float = 0.04
+    penalty_vocabulary_basic: float = 0.02
+    penalty_cross_scene_per: float = 0.02
+    penalty_cross_scene_max: int = 3
 
     # ── Prose Structure Thresholds ────────────────────────────────────
     opener_monotony_threshold: float = 0.30
@@ -172,8 +232,15 @@ class PrototypeConfig(BaseModel):
     zipf_threshold: float = 5.5
     mattr_window: int = 50
 
+    # ── Slop Detection ─────────────────────────────────────────────
+    slop_phrase_penalty_scale: float = 10.0
+    slop_word_excess_weight: float = 0.3
+    slop_word_min_severity: float = 0.5
+    slop_word_free_occurrences: int = 1
+
     # ── Pipeline Control ─────────────────────────────────────────────
     max_revisions: int = 2
+    min_revisions: int = 1  # guaranteed editing pass(es) per scene
 
     # ── Agent Role Names ─────────────────────────────────────────────
     story_brief_role: str = "Plot Architect"
@@ -256,5 +323,27 @@ class PrototypeConfig(BaseModel):
                 mtld_threshold=self.mtld_threshold,
                 zipf_threshold=self.zipf_threshold,
                 mattr_window=self.mattr_window,
+            ),
+            "slop": SlopConfig(
+                phrase_penalty_scale=self.slop_phrase_penalty_scale,
+                word_excess_weight=self.slop_word_excess_weight,
+                word_min_severity=self.slop_word_min_severity,
+                word_free_occurrences=self.slop_word_free_occurrences,
+            ),
+            "score_caps": ScoreCapConfig(
+                cap_pacing_on_monotony=self.cap_pacing_on_monotony,
+                cap_prose_on_slop_count=self.cap_prose_on_slop_count,
+                cap_prose_on_slop_value=self.cap_prose_on_slop_value,
+                cap_prose_on_low_diversity=self.cap_prose_on_low_diversity,
+            ),
+            "advisory_penalties": AdvisoryPenaltyConfig(
+                opener_monotony=self.penalty_opener_monotony,
+                length_monotony=self.penalty_length_monotony,
+                passive_heavy=self.penalty_passive_heavy,
+                structural_monotony=self.penalty_structural_monotony,
+                low_diversity=self.penalty_low_diversity,
+                vocabulary_basic=self.penalty_vocabulary_basic,
+                cross_scene_per=self.penalty_cross_scene_per,
+                cross_scene_max=self.penalty_cross_scene_max,
             ),
         }

@@ -32,5 +32,6 @@ class PipelineState(BaseModel):
     current_scene_index: int = Field(default=0, ge=0)
     revision_count: int = Field(default=0, ge=0)
     max_revisions: int = Field(default=2, ge=0)
+    min_revisions: int = Field(default=1, ge=0)
     current_stage: str = Field(default="planning")
     errors: list[str] = Field(default_factory=list)
