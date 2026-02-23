@@ -238,6 +238,11 @@ class PrototypeConfig(BaseModel):
     slop_word_min_severity: float = 0.5
     slop_word_free_occurrences: int = 1
 
+    # ── Creative Sampling (Scene Writer only) ────────────────────────
+    creative_temperature: float = 1.3
+    frequency_penalty: float = 0.5
+    presence_penalty: float = 0.3
+
     # ── Pipeline Control ─────────────────────────────────────────────
     max_revisions: int = 2
     min_revisions: int = 1  # guaranteed editing pass(es) per scene
