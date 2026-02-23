@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from ai_writer.agents.scene_writer import run_scene_writer
+from ai_writer.agents.scene_writer import _extract_prose, run_scene_writer
 from ai_writer.schemas.characters import (
     CharacterProfile,
     CharacterRole,
@@ -63,10 +63,18 @@ class TestSceneWriter:
     @patch("ai_writer.agents.scene_writer.get_llm")
     @patch("ai_writer.agents.scene_writer.get_settings")
     def test_produces_scene_draft(self, mock_settings, mock_get_llm):
-        mock_settings.return_value = MagicMock(default_temperature=0.7)
+        mock_settings.return_value = MagicMock(
+            creative_temperature=1.3,
+            frequency_penalty=0.5,
+            presence_penalty=0.3,
+        )
 
         mock_response = MagicMock()
         mock_response.content = (
+            "1. Cold metal vibration through boot soles.\n"
+            "2. Captain grips the railing until knuckles whiten.\n"
+            "3. The loneliness of command.\n\n"
+            "---PROSE---\n"
             "The station hummed quietly as Captain stood by the viewport."
         )
         mock_llm = MagicMock()
@@ -84,7 +92,11 @@ class TestSceneWriter:
     @patch("ai_writer.agents.scene_writer.get_llm")
     @patch("ai_writer.agents.scene_writer.get_settings")
     def test_revision_replaces_last_draft(self, mock_settings, mock_get_llm):
-        mock_settings.return_value = MagicMock(default_temperature=0.7)
+        mock_settings.return_value = MagicMock(
+            creative_temperature=1.3,
+            frequency_penalty=0.5,
+            presence_penalty=0.3,
+        )
 
         mock_response = MagicMock()
         mock_response.content = "Revised scene prose."
@@ -127,7 +139,11 @@ class TestSceneWriter:
     @patch("ai_writer.agents.scene_writer.get_settings")
     def test_revision_includes_dimension_breakdown(self, mock_settings, mock_get_llm):
         """Verify the revision addendum includes per-dimension scores."""
-        mock_settings.return_value = MagicMock(default_temperature=0.7)
+        mock_settings.return_value = MagicMock(
+            creative_temperature=1.3,
+            frequency_penalty=0.5,
+            presence_penalty=0.3,
+        )
 
         mock_response = MagicMock()
         mock_response.content = "Revised prose with better voice."
@@ -179,7 +195,11 @@ class TestSceneWriter:
     @patch("ai_writer.agents.scene_writer.get_settings")
     def test_revision_includes_confirmed_slop(self, mock_settings, mock_get_llm):
         """Verify confirmed slop phrases are forwarded in revision prompt."""
-        mock_settings.return_value = MagicMock(default_temperature=0.7)
+        mock_settings.return_value = MagicMock(
+            creative_temperature=1.3,
+            frequency_penalty=0.5,
+            presence_penalty=0.3,
+        )
 
         mock_response = MagicMock()
         mock_response.content = "Revised prose."
@@ -230,7 +250,11 @@ class TestSceneWriter:
     @patch("ai_writer.agents.scene_writer.get_settings")
     def test_revision_includes_structural_issues(self, mock_settings, mock_get_llm):
         """Verify structural issues are forwarded in revision prompt."""
-        mock_settings.return_value = MagicMock(default_temperature=0.7)
+        mock_settings.return_value = MagicMock(
+            creative_temperature=1.3,
+            frequency_penalty=0.5,
+            presence_penalty=0.3,
+        )
 
         mock_response = MagicMock()
         mock_response.content = "Revised prose with varied structure."
@@ -282,7 +306,11 @@ class TestSceneWriter:
     @patch("ai_writer.agents.scene_writer.get_settings")
     def test_polish_addendum_used_when_approved(self, mock_settings, mock_get_llm):
         """When draft was approved but forced-revised, use POLISH PASS not REVISION."""
-        mock_settings.return_value = MagicMock(default_temperature=0.7)
+        mock_settings.return_value = MagicMock(
+            creative_temperature=1.3,
+            frequency_penalty=0.5,
+            presence_penalty=0.3,
+        )
 
         mock_response = MagicMock()
         mock_response.content = "Polished prose."
@@ -334,7 +362,11 @@ class TestSceneWriter:
         self, mock_settings, mock_get_llm
     ):
         """When draft failed QA, use REVISION INSTRUCTIONS not POLISH PASS."""
-        mock_settings.return_value = MagicMock(default_temperature=0.7)
+        mock_settings.return_value = MagicMock(
+            creative_temperature=1.3,
+            frequency_penalty=0.5,
+            presence_penalty=0.3,
+        )
 
         mock_response = MagicMock()
         mock_response.content = "Revised prose."
@@ -378,3 +410,155 @@ class TestSceneWriter:
         system_msg = call_args[0]["content"]
         assert "REVISION INSTRUCTIONS" in system_msg
         assert "POLISH PASS" not in system_msg
+
+    @patch("ai_writer.agents.scene_writer.get_llm")
+    @patch("ai_writer.agents.scene_writer.get_settings")
+    def test_first_draft_includes_planning_preamble(self, mock_settings, mock_get_llm):
+        """First draft (revision_count=0) should include planning questions."""
+        mock_settings.return_value = MagicMock(
+            creative_temperature=1.3,
+            frequency_penalty=0.5,
+            presence_penalty=0.3,
+        )
+
+        mock_response = MagicMock()
+        mock_response.content = (
+            "1. Metallic chill.\n2. Gripping the railing.\n"
+            "3. Unspoken dread.\n\n---PROSE---\nThe hull creaked."
+        )
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = mock_response
+        mock_get_llm.return_value = mock_llm
+
+        state = _build_state(revision_count=0)
+        run_scene_writer(state)
+
+        call_args = mock_llm.invoke.call_args[0][0]
+        user_msg = call_args[1]["content"]
+        assert "dominant physical sensation" in user_msg
+        assert "---PROSE---" in user_msg
+
+    @patch("ai_writer.agents.scene_writer.get_llm")
+    @patch("ai_writer.agents.scene_writer.get_settings")
+    def test_revision_skips_planning_preamble(self, mock_settings, mock_get_llm):
+        """Revisions (revision_count > 0) should NOT include planning questions."""
+        mock_settings.return_value = MagicMock(
+            creative_temperature=1.3,
+            frequency_penalty=0.5,
+            presence_penalty=0.3,
+        )
+
+        mock_response = MagicMock()
+        mock_response.content = "Revised prose."
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = mock_response
+        mock_get_llm.return_value = mock_llm
+
+        from ai_writer.schemas.writing import SceneDraft
+
+        existing = [
+            SceneDraft(
+                scene_id="s1",
+                act_number=1,
+                scene_number=1,
+                prose="Old.",
+                word_count=1,
+            )
+        ]
+        feedback = [
+            EditFeedback(
+                scene_id="s1",
+                quality_score=0.5,
+                approved=False,
+                revision_instructions="Improve.",
+                rubric=SceneRubric(
+                    style_adherence=2,
+                    character_voice=2,
+                    outline_adherence=2,
+                    pacing=2,
+                    prose_quality=2,
+                ),
+            )
+        ]
+
+        state = _build_state(
+            revision_count=1, existing_drafts=existing, edit_feedback=feedback
+        )
+        run_scene_writer(state)
+
+        call_args = mock_llm.invoke.call_args[0][0]
+        user_msg = call_args[1]["content"]
+        assert "dominant physical sensation" not in user_msg
+
+    @patch("ai_writer.agents.scene_writer.get_llm")
+    @patch("ai_writer.agents.scene_writer.get_settings")
+    def test_first_draft_strips_planning_from_prose(self, mock_settings, mock_get_llm):
+        """First draft should strip planning answers, keeping only prose."""
+        mock_settings.return_value = MagicMock(
+            creative_temperature=1.3,
+            frequency_penalty=0.5,
+            presence_penalty=0.3,
+        )
+
+        mock_response = MagicMock()
+        mock_response.content = (
+            "1. Cold metal vibration.\n"
+            "2. Captain grips the railing.\n"
+            "3. The loneliness of command.\n\n"
+            "---PROSE---\n"
+            "The station hummed."
+        )
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = mock_response
+        mock_get_llm.return_value = mock_llm
+
+        state = _build_state(revision_count=0)
+        result = run_scene_writer(state)
+
+        prose = result["scene_drafts"][0].prose
+        assert "The station hummed." == prose
+        assert "Cold metal" not in prose
+        assert "---PROSE---" not in prose
+
+    @patch("ai_writer.agents.scene_writer.get_llm")
+    @patch("ai_writer.agents.scene_writer.get_settings")
+    def test_creative_temperature_and_penalties_used(self, mock_settings, mock_get_llm):
+        """Scene Writer should use creative_temperature and sampling penalties."""
+        mock_settings.return_value = MagicMock(
+            creative_temperature=1.3,
+            frequency_penalty=0.5,
+            presence_penalty=0.3,
+        )
+
+        mock_response = MagicMock()
+        mock_response.content = "---PROSE---\nSome prose."
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = mock_response
+        mock_get_llm.return_value = mock_llm
+
+        state = _build_state()
+        run_scene_writer(state)
+
+        mock_get_llm.assert_called_once_with(
+            temperature=1.3,
+            frequency_penalty=0.5,
+            presence_penalty=0.3,
+        )
+
+
+class TestExtractProse:
+    def test_delimiter_extraction(self):
+        raw = "1. Sensation.\n2. Action.\n3. Subtext.\n\n---PROSE---\nThe ship moved."
+        assert _extract_prose(raw) == "The ship moved."
+
+    def test_delimiter_with_extra_whitespace(self):
+        raw = "Planning answers.\n\n---PROSE---\n\n  The ship moved slowly.  "
+        assert _extract_prose(raw) == "The ship moved slowly."
+
+    def test_fallback_numbered_answers(self):
+        raw = "1. Cold air.\n2. She grips the wheel.\n3. Fear unsaid.\n\nThe hull creaked."
+        assert _extract_prose(raw) == "The hull creaked."
+
+    def test_no_planning_returns_as_is(self):
+        raw = "The station hummed quietly as Captain stood by the viewport."
+        assert _extract_prose(raw) == raw
