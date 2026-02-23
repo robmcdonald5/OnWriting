@@ -87,9 +87,13 @@ def build_beat_outliner_prompt(config: BeatOutlinerPromptConfig) -> str:
 
 
 def build_scene_writer_prompt(config: SceneWriterPromptConfig) -> str:
-    """Compose the Scene Writer system prompt (without revision addendum)."""
+    """Compose the Scene Writer system prompt (without revision addendum).
+
+    Unlike other agents, the Scene Writer uses an aesthetic persona instead of
+    the generic ROLE_IDENTITY. Craft principles and banned constructions appear
+    FIRST (highest attention weight), followed by structural requirements.
+    """
     parts = [
-        ROLE_IDENTITY.format(role_name=config.role_name),
         TASK_STATEMENTS["scene_writer"],
         "",
         SCENE_WRITER_GUIDELINES.format(
