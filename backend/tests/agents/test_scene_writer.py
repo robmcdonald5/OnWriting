@@ -170,7 +170,211 @@ class TestSceneWriter:
         # Verify the LLM was called with dimension info in the system prompt
         call_args = mock_llm.invoke.call_args[0][0]
         system_msg = call_args[0]["content"]
-        assert "style=2/3" in system_msg
-        assert "voice=1/3" in system_msg
-        assert "character_voice (scored 1/3)" in system_msg
+        assert "style=2/4" in system_msg
+        assert "voice=1/4" in system_msg
+        assert "character_voice (scored 1/4)" in system_msg
         assert "CRITICAL" in system_msg
+
+    @patch("ai_writer.agents.scene_writer.get_llm")
+    @patch("ai_writer.agents.scene_writer.get_settings")
+    def test_revision_includes_confirmed_slop(self, mock_settings, mock_get_llm):
+        """Verify confirmed slop phrases are forwarded in revision prompt."""
+        mock_settings.return_value = MagicMock(default_temperature=0.7)
+
+        mock_response = MagicMock()
+        mock_response.content = "Revised prose."
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = mock_response
+        mock_get_llm.return_value = mock_llm
+
+        from ai_writer.schemas.writing import SceneDraft
+
+        existing = [
+            SceneDraft(
+                scene_id="s1",
+                act_number=1,
+                scene_number=1,
+                prose="Old.",
+                word_count=1,
+            )
+        ]
+        feedback = [
+            EditFeedback(
+                scene_id="s1",
+                quality_score=0.5,
+                approved=False,
+                revision_instructions="Fix AI-isms.",
+                confirmed_slop=["testament to", "tapestry of"],
+                rubric=SceneRubric(
+                    style_adherence=2,
+                    character_voice=2,
+                    outline_adherence=2,
+                    pacing=2,
+                    prose_quality=1,
+                ),
+            )
+        ]
+
+        state = _build_state(
+            revision_count=1, existing_drafts=existing, edit_feedback=feedback
+        )
+        run_scene_writer(state)
+
+        call_args = mock_llm.invoke.call_args[0][0]
+        system_msg = call_args[0]["content"]
+        assert "testament to" in system_msg
+        assert "tapestry of" in system_msg
+        assert "REPLACE" in system_msg
+
+    @patch("ai_writer.agents.scene_writer.get_llm")
+    @patch("ai_writer.agents.scene_writer.get_settings")
+    def test_revision_includes_structural_issues(self, mock_settings, mock_get_llm):
+        """Verify structural issues are forwarded in revision prompt."""
+        mock_settings.return_value = MagicMock(default_temperature=0.7)
+
+        mock_response = MagicMock()
+        mock_response.content = "Revised prose with varied structure."
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = mock_response
+        mock_get_llm.return_value = mock_llm
+
+        from ai_writer.schemas.writing import SceneDraft
+
+        existing = [
+            SceneDraft(
+                scene_id="s1",
+                act_number=1,
+                scene_number=1,
+                prose="Old.",
+                word_count=1,
+            )
+        ]
+        feedback = [
+            EditFeedback(
+                scene_id="s1",
+                quality_score=0.5,
+                approved=False,
+                revision_instructions="Vary sentence structure.",
+                rubric=SceneRubric(
+                    style_adherence=2,
+                    character_voice=2,
+                    outline_adherence=2,
+                    pacing=2,
+                    prose_quality=2,
+                    opener_monotony=True,
+                    low_diversity=True,
+                ),
+            )
+        ]
+
+        state = _build_state(
+            revision_count=1, existing_drafts=existing, edit_feedback=feedback
+        )
+        run_scene_writer(state)
+
+        call_args = mock_llm.invoke.call_args[0][0]
+        system_msg = call_args[0]["content"]
+        assert "VARY" in system_msg
+        assert "monotonous" in system_msg.lower() or "openings" in system_msg.lower()
+        assert "diversity" in system_msg.lower() or "vocabulary" in system_msg.lower()
+
+    @patch("ai_writer.agents.scene_writer.get_llm")
+    @patch("ai_writer.agents.scene_writer.get_settings")
+    def test_polish_addendum_used_when_approved(self, mock_settings, mock_get_llm):
+        """When draft was approved but forced-revised, use POLISH PASS not REVISION."""
+        mock_settings.return_value = MagicMock(default_temperature=0.7)
+
+        mock_response = MagicMock()
+        mock_response.content = "Polished prose."
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = mock_response
+        mock_get_llm.return_value = mock_llm
+
+        from ai_writer.schemas.writing import SceneDraft
+
+        existing = [
+            SceneDraft(
+                scene_id="s1",
+                act_number=1,
+                scene_number=1,
+                prose="Great first draft.",
+                word_count=4,
+            )
+        ]
+        feedback = [
+            EditFeedback(
+                scene_id="s1",
+                quality_score=0.85,
+                approved=True,
+                revision_instructions="Minor polish suggestions.",
+                rubric=SceneRubric(
+                    style_adherence=4,
+                    character_voice=3,
+                    outline_adherence=4,
+                    pacing=3,
+                    prose_quality=3,
+                ),
+            )
+        ]
+
+        state = _build_state(
+            revision_count=1, existing_drafts=existing, edit_feedback=feedback
+        )
+        run_scene_writer(state)
+
+        call_args = mock_llm.invoke.call_args[0][0]
+        system_msg = call_args[0]["content"]
+        assert "POLISH PASS" in system_msg
+        assert "approved" in system_msg.lower()
+        assert "REVISION INSTRUCTIONS" not in system_msg
+
+    @patch("ai_writer.agents.scene_writer.get_llm")
+    @patch("ai_writer.agents.scene_writer.get_settings")
+    def test_revision_addendum_used_when_not_approved(
+        self, mock_settings, mock_get_llm
+    ):
+        """When draft failed QA, use REVISION INSTRUCTIONS not POLISH PASS."""
+        mock_settings.return_value = MagicMock(default_temperature=0.7)
+
+        mock_response = MagicMock()
+        mock_response.content = "Revised prose."
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = mock_response
+        mock_get_llm.return_value = mock_llm
+
+        from ai_writer.schemas.writing import SceneDraft
+
+        existing = [
+            SceneDraft(
+                scene_id="s1",
+                act_number=1,
+                scene_number=1,
+                prose="Weak draft.",
+                word_count=2,
+            )
+        ]
+        feedback = [
+            EditFeedback(
+                scene_id="s1",
+                quality_score=0.45,
+                approved=False,
+                revision_instructions="Major pacing and voice issues.",
+                rubric=SceneRubric(
+                    style_adherence=2,
+                    character_voice=1,
+                    outline_adherence=2,
+                    pacing=2,
+                    prose_quality=2,
+                ),
+            )
+        ]
+
+        state = _build_state(
+            revision_count=1, existing_drafts=existing, edit_feedback=feedback
+        )
+        run_scene_writer(state)
+
+        call_args = mock_llm.invoke.call_args[0][0]
+        system_msg = call_args[0]["content"]
+        assert "REVISION INSTRUCTIONS" in system_msg
+        assert "POLISH PASS" not in system_msg

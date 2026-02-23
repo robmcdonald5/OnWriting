@@ -17,6 +17,7 @@ Usage in agents:
     result = invoke(structured_llm, [{"role": "user", "content": "..."}])
 """
 
+import logging
 import re
 import time
 from collections import deque
@@ -28,6 +29,8 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel
 
 from ai_writer.config import get_settings
+
+logger = logging.getLogger("ai_writer.agents.base")
 
 # --- Rate Limiter ---
 
@@ -50,19 +53,14 @@ def _wait_for_rate_limit() -> None:
         if len(_call_timestamps) >= _RPM_LIMIT:
             wait_seconds = 60 - (now - _call_timestamps[0]) + 0.5
             if wait_seconds > 0:
-                print(
-                    f"  [Rate Limiter] At {_RPM_LIMIT} RPM cap, "
-                    f"waiting {wait_seconds:.1f}s...",
-                    flush=True,
+                logger.debug(
+                    "At %d RPM cap, waiting %.1fs...", _RPM_LIMIT, wait_seconds
                 )
                 time.sleep(wait_seconds)
 
         _call_timestamps.append(time.time())
         _daily_call_count += 1
-        print(
-            f"  [Rate Limiter] API call #{_daily_call_count} this session",
-            flush=True,
-        )
+        logger.debug("API call #%d this session", _daily_call_count)
 
 
 def _parse_retry_delay(error_message: str) -> float:
@@ -130,10 +128,11 @@ def invoke(runnable: Runnable[Any, Any], input: Any, **kwargs: Any) -> Any:
                 delay = _parse_retry_delay(error_str)
                 last_error = e
                 if attempt < _MAX_RETRIES - 1:
-                    print(
-                        f"  [Rate Limiter] 429 hit. Server says wait {delay:.0f}s "
-                        f"(attempt {attempt + 1}/{_MAX_RETRIES})...",
-                        flush=True,
+                    logger.warning(
+                        "429 hit. Server says wait %.0fs (attempt %d/%d)...",
+                        delay,
+                        attempt + 1,
+                        _MAX_RETRIES,
                     )
                     time.sleep(delay)
                     continue

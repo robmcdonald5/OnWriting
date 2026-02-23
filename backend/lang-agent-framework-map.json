@@ -1,6 +1,6 @@
 {
-  "framework_version": "1.0.0",
-  "last_updated": "2025-08-05",
+  "framework_version": "1.2.0",
+  "last_updated": "2026-02-20",
   "description": "Relational map of the AI Creative Writing Agentic Framework showing agent relationships, roles, inputs, and outputs",
   
   "departments": {
@@ -226,7 +226,7 @@
         },
         
         "scene_chapter_writer": {
-          "role": "Writes individual scenes/chapters with rolling memory of prior summaries",
+          "role": "Writes individual scenes/chapters with rolling memory of prior summaries. On revision, receives confirmed_slop and structural issues as explicit REPLACE/VARY directives.",
           "sub_agents": [
             "scene_architect"
           ],
@@ -234,7 +234,10 @@
             "scene_outline",
             "prior_summaries",
             "character_context",
-            "world_context"
+            "world_context",
+            "confirmed_slop (on revision)",
+            "structural_issues (on revision)",
+            "edit_feedback.approved (selects polish vs revision tone)"
           ],
           "outputs": [
             "scene_content",
@@ -243,6 +246,7 @@
           ],
           "relationships": {
             "receives_context_from": ["memory_manager", "lore_master"],
+            "receives_feedback_from": ["style_editor"],
             "uses_templates_from": ["template_generator"],
             "provides_content_to": ["continuity_editor", "character_context_editor"],
             "coordinates_with": ["act_writer"]
@@ -331,19 +335,58 @@
         },
         
         "style_editor": {
-          "role": "Polishes grammar, syntax, and prose flair without altering plot or character",
+          "role": "Three-layer rubric evaluator with calibrated scoring: deterministic text analysis, LLM dimension scoring (1-4 atomic criteria), deterministic score caps, algorithmic composite. Evaluates scene prose and gates revision loops.",
+          "scoring_system": {
+            "scale": "1-4 per dimension (atomic binary criteria, score = criteria met)",
+            "normalization": "(weighted_sum - 1) / 3 maps [1,4] to [0,1]",
+            "weights": "equal 0.20 per dimension (style, voice, outline, pacing, prose)",
+            "threshold": 0.7,
+            "min_revisions": 1,
+            "key_math": "all-3s = 0.67 (below threshold), 4/4/4/2/3 = 0.80 (passes barely), 4/4/4/2/2 + penalty = 0.69 (fails)",
+            "critique_before_score": true,
+            "deterministic_criteria": [
+              "Pacing: sentence length CV, opener variety",
+              "Prose Quality: confirmed AI-ism count, vocabulary basic flag",
+              "Outline Adherence: word count within tolerance"
+            ]
+          },
+          "score_caps": {
+            "pacing": "capped to 2 on opener_monotony or length_monotony",
+            "prose_quality_slop": "capped to 2 when 3+ confirmed AI-isms",
+            "prose_quality_vocab": "capped to 3 on low vocabulary diversity"
+          },
           "inputs": [
-            "raw_prose",
-            "style_guidelines",
-            "tone_specifications"
+            "scene_prose",
+            "scene_outline",
+            "tone_profile",
+            "character_roster",
+            "prior_scene_proses",
+            "scene_metrics",
+            "prompt_configs (includes score_caps, advisory_penalties)"
           ],
           "outputs": [
-            "polished_prose",
-            "style_improvements",
-            "grammar_corrections"
+            "edit_feedback (with capped scores)",
+            "confirmed_slop",
+            "scene_metrics"
           ],
+          "deterministic_analysis": [
+            "word_count_check",
+            "tense_consistency",
+            "slop_detection (phrase + word level with allowlist)",
+            "structural_analysis (spaCy)",
+            "vocabulary_metrics (MTLD, Zipf, readability)",
+            "cross_scene_repetition (n-gram overlap)",
+            "atomic_criteria_pre_evaluation (PASS/FAIL injected into LLM context)"
+          ],
+          "data_flows": {
+            "confirmed_slop_to": ["scene_chapter_writer"],
+            "structural_issues_to": ["scene_chapter_writer"],
+            "scene_metrics_to": ["graph_state"],
+            "deterministic_criteria_to": ["llm_eval_context"]
+          },
           "relationships": {
-            "receives_content_from": ["act_writer", "scene_chapter_writer"],
+            "receives_content_from": ["scene_chapter_writer"],
+            "forwards_feedback_to": ["scene_chapter_writer"],
             "coordinates_with": ["editor_in_chief"],
             "maintains_consistency_with": ["character_context_editor"]
           }
@@ -485,7 +528,11 @@
       "Feedback Collector → Plot Architect (system adjustments)",
       "Act Summarizer → Memory Manager → Scene Writer (continuity)",
       "Fact Checker → Lore Master (consistency validation)",
-      "Error Handler → Task Orchestrator (recovery routing)"
+      "Error Handler → Task Orchestrator (recovery routing)",
+      "Style Editor → Scene Writer (confirmed_slop + structural issues → REPLACE/VARY directives)",
+      "Style Editor → GraphState (scene_metrics for MTLD trend regression detection)",
+      "Style Editor deterministic analysis → LLM eval context (pre-evaluated atomic criteria PASS/FAIL)",
+      "Style Editor score caps → rubric (Python hard-caps override LLM generosity post-scoring)"
     ],
     
     "data_persistence": [

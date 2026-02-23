@@ -1,10 +1,11 @@
 """Prototype pipeline — minimal 4-agent story generation with write-edit loop.
 
 Pipeline flow:
-    START → plot_architect → beat_outliner → scene_writer → style_editor
-        → (revise → scene_writer | advance → scene_writer | complete → END)
+    START -> plot_architect -> beat_outliner -> scene_writer -> style_editor
+        -> (revise -> scene_writer | advance -> scene_writer | complete -> END)
 """
 
+import logging
 from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -15,11 +16,13 @@ from ai_writer.agents.plot_architect import run_plot_architect
 from ai_writer.agents.scene_writer import run_scene_writer
 from ai_writer.agents.style_editor import run_style_editor
 from ai_writer.schemas.characters import CharacterRoster
-from ai_writer.schemas.editing import EditFeedback
+from ai_writer.schemas.editing import EditFeedback, SceneMetrics
 from ai_writer.schemas.story import StoryBrief
 from ai_writer.schemas.structure import StoryOutline
 from ai_writer.schemas.world import WorldContext
 from ai_writer.schemas.writing import SceneDraft
+
+logger = logging.getLogger("ai_writer.pipelines.prototype")
 
 
 class GraphState(TypedDict, total=False):
@@ -38,7 +41,9 @@ class GraphState(TypedDict, total=False):
     current_scene_index: int
     revision_count: int
     max_revisions: int
+    min_revisions: int
     current_stage: str
+    scene_metrics: list[SceneMetrics]
     errors: list[str]
     prompt_configs: dict[str, Any]
 
@@ -60,18 +65,29 @@ def should_revise_or_advance(state: GraphState) -> str:
     latest_feedback = feedback_list[-1]
     revision_count = state.get("revision_count", 0)
     max_revisions = state.get("max_revisions", 2)
+    min_revisions = state.get("min_revisions", 0)
     current_idx = state.get("current_scene_index", 0)
     total_scenes = _get_total_scenes(state)
 
     # Log dimension scores for visibility
     rubric = latest_feedback.rubric
     decision = "REVISE" if not latest_feedback.approved else "PASS"
-    print(
-        f"  [Pipeline] Scene {latest_feedback.scene_id}: "
-        f"{rubric.dimension_summary()} "
-        f"→ {latest_feedback.quality_score:.2f} [{decision}]",
-        flush=True,
+    logger.info(
+        "Scene %s: %s -> %.2f [%s]",
+        latest_feedback.scene_id,
+        rubric.dimension_summary(),
+        latest_feedback.quality_score,
+        decision,
     )
+
+    # Force revision if below minimum editing passes (bounded by max_revisions)
+    if revision_count < min_revisions and revision_count < max_revisions:
+        logger.info(
+            "Forcing revision: revision_count=%d < min_revisions=%d",
+            revision_count,
+            min_revisions,
+        )
+        return "revise"
 
     # If not approved and we have revision budget, revise
     if not latest_feedback.approved and revision_count < max_revisions:

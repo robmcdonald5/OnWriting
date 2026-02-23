@@ -1,7 +1,9 @@
 """Beat Outliner agent — breaks the story brief into narrative beats and scene outlines.
 
-Single LLM call: StoryBrief + CharacterRoster + WorldContext → StoryOutline
+Single LLM call: StoryBrief + CharacterRoster + WorldContext -> StoryOutline
 """
+
+import logging
 
 from ai_writer.agents.base import get_structured_llm, invoke
 from ai_writer.config import get_settings
@@ -9,9 +11,11 @@ from ai_writer.prompts.builders import build_beat_outliner_prompt
 from ai_writer.prompts.configs import BeatOutlinerPromptConfig
 from ai_writer.schemas.structure import StoryOutline
 
+logger = logging.getLogger("ai_writer.agents.beat_outliner")
+
 
 def run_beat_outliner(state: dict) -> dict:
-    """Execute the Beat Outliner: StoryBrief + CharacterRoster + WorldContext → StoryOutline."""
+    """Execute the Beat Outliner: StoryBrief + CharacterRoster + WorldContext -> StoryOutline."""
     settings = get_settings()
     temp = settings.planning_temperature
 
@@ -22,7 +26,7 @@ def run_beat_outliner(state: dict) -> dict:
     configs = state.get("prompt_configs", {})
     config = configs.get("beat_outliner", BeatOutlinerPromptConfig())
 
-    print("  [Beat Outliner] Building story outline...", flush=True)
+    logger.info("Building story outline...")
     outline_llm = get_structured_llm(StoryOutline, temperature=temp)
 
     context = (
@@ -42,9 +46,10 @@ def run_beat_outliner(state: dict) -> dict:
         ],
     )
 
-    print(
-        f"  [Beat Outliner] Outline done: {story_outline.total_scenes} scenes, {story_outline.total_beats} beats",
-        flush=True,
+    logger.info(
+        "Outline done: %d scenes, %d beats",
+        story_outline.total_scenes,
+        story_outline.total_beats,
     )
 
     return {
