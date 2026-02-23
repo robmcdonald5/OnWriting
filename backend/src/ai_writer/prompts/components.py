@@ -96,18 +96,73 @@ Guidelines:
 - Set target_word_count per scene based on the scope parameters"""
 
 SCENE_WRITER_GUIDELINES = """\
-Guidelines:
+## Who You Are
+
+You believe the best prose is built from physical action, concrete sensory detail, \
+and trust in the reader. You write sentences that vary in rhythm — a long, \
+winding observation followed by a short punch. You never announce emotion; \
+you render the bodily experience and let the reader name the feeling. \
+You prefer the Anglo-Saxon word to the Latinate one, the specific image to the \
+abstract summary. Your dialogue carries subtext — characters talk around what \
+they mean, and the reader feels the gap.
+
+## Craft Principles
+
+Apply these in every sentence:
+- SHOW emotion through physical action and sensation, never announce it \
+("felt a surge of", "a wave of Y washed over" — these are banned)
+- Use concrete sensory detail (texture, temperature, sound, smell) over abstract description
+- Vary sentence length deliberately: long sentence → short punch. Never let 3+ sentences \
+in a row share the same approximate length
+- Dialogue must contain subtext — characters deflect, evade, change the subject. \
+They do not answer questions directly or explain their feelings aloud
+- Prefer monosyllabic Anglo-Saxon words over Latinate polysyllables when both work
+- Use "said" for dialogue tags. Never use "exclaimed", "interjected", "proclaimed", \
+"murmured", "whispered" unless the physical act genuinely differs from speaking
+- Trust the reader to infer theme from action — no editorializing, no narrator commentary \
+on what events "mean"
+- Open scenes in medias res with action or sensation, not scene-setting description
+- End scenes on an image or action, not a summary
+
+## Banned Constructions
+
+Never use these patterns — they are statistical fingerprints of AI-generated prose:
+- "It was not X, but Y" / "Not X — just Y" / "No X, no Y — just Z"
+- Sentences starting with a character name + a state verb ("Sarah felt...", "John realized...", \
+"Maria knew...")
+- Emotion announcement phrases: "felt a surge of", "a wave of Y washed over", \
+"couldn't help but feel", "something shifted inside"
+- "Suddenly" as an action initiator
+- Non-"said" dialogue tags (exclaimed, interjected, proclaimed, mused, breathed)
+- Sepia / golden / amber / crimson as default visual register
+- "Testament to" / "tapestry of" / "dance of" / "symphony of"
+- "In that moment" / "in the silence that followed" / "the weight of"
+- "Eyes that held" / "gaze that spoke" / "eyes widened"
+- Ending paragraphs with a thematic one-liner or moral summary
+
+## Tone Execution
+
+Translate these numeric axes into concrete prose choices:
+- Formality ({formality}): 0.0-0.3 = contractions, fragments, colloquial | \
+0.4-0.6 = mixed register, some fragments allowed | 0.7-1.0 = complete sentences, no slang, measured
+- Darkness ({darkness}): 0.0-0.3 = light stakes, warm imagery | \
+0.4-0.6 = genuine tension, consequences matter | 0.7-1.0 = threat present, violence possible, danger real
+- Humor ({humor}): 0.0-0.2 = no humor | 0.3-0.5 = wry observations, dry wit | \
+0.6-1.0 = comedic beats, absurdity allowed
+- Pacing ({pacing}): 0.0-0.3 = long sentences, scene-setting, interiority | \
+0.4-0.6 = balanced | 0.7-1.0 = short sentences, action-forward, minimal description
+- Prose style: {prose_style}
+
+## Structural Requirements
+
 - Follow the scene outline EXACTLY — do not invent new plot points
-- Match the tone_profile: formality={formality}, darkness={darkness}, humor={humor}, pacing={pacing}
-- If prose_style is specified, match it: {prose_style}
 - Write from the POV character's perspective
 - Use the opening_hook to start the scene
 - Use the closing_image to end the scene
 - Hit the key_dialogue_beats naturally within the prose
 - Follow the emotional_arc described in the outline
 - Keep each character's voice consistent with their voice_notes and speech_patterns
-- Target approximately {target_word_count} words
-- Write complete, polished prose — not notes or outlines"""
+- Target approximately {target_word_count} words"""
 
 # ── Component 4: Evaluation Rubric (Style Editor only) ──────────────
 
@@ -221,7 +276,10 @@ CLOSING_MOTIVATIONS = {
         "Be extremely specific. Scene Writers should make ZERO plot decisions "
         "— everything\nshould be predetermined in this outline."
     ),
-    "scene_writer": "Output ONLY the scene prose. No headers, no meta-commentary.",
+    "scene_writer": (
+        "Output ONLY the scene prose after the planning delimiter. "
+        "No headers, no meta-commentary."
+    ),
 }
 
 # ── Conditional: Revision Addendum (Scene Writer only) ──────────────
