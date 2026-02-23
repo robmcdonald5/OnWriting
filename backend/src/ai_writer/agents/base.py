@@ -77,14 +77,25 @@ def _parse_retry_delay(error_message: str) -> float:
 def get_llm(
     temperature: float | None = None,
     model: str | None = None,
+    frequency_penalty: float | None = None,
+    presence_penalty: float | None = None,
 ) -> ChatGoogleGenerativeAI:
     """Create a ChatGoogleGenerativeAI instance.
 
     Returns a plain LLM — use invoke() to call it with rate limiting.
     max_retries=1 disables the SDK's broken retry (it ignores server
     retry_delay). Our invoke() handles retries properly instead.
+
+    frequency_penalty and presence_penalty are passed via model_kwargs
+    when non-None. Only the Scene Writer uses these for creative sampling.
     """
     settings = get_settings()
+    model_kwargs: dict = {}
+    if frequency_penalty is not None:
+        model_kwargs["frequency_penalty"] = frequency_penalty
+    if presence_penalty is not None:
+        model_kwargs["presence_penalty"] = presence_penalty
+
     return ChatGoogleGenerativeAI(
         model=model or settings.default_model,
         temperature=(
@@ -92,6 +103,7 @@ def get_llm(
         ),
         google_api_key=settings.google_api_key,
         max_retries=1,
+        **({"model_kwargs": model_kwargs} if model_kwargs else {}),
     )
 
 

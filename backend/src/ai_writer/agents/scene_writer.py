@@ -5,6 +5,7 @@ If revision_count > 0, incorporates editor feedback.
 """
 
 import logging
+import re
 
 from ai_writer.agents.base import get_llm, invoke
 from ai_writer.config import get_settings
@@ -14,6 +15,49 @@ from ai_writer.prompts.configs import SceneWriterPromptConfig
 from ai_writer.schemas.writing import SceneDraft
 
 logger = logging.getLogger("ai_writer.agents.scene_writer")
+
+# Delimiter the model uses to separate planning answers from prose
+_PROSE_DELIMITER = "---PROSE---"
+
+# Planning questions prepended to the user message to force concrete choices
+_PLANNING_PREAMBLE = f"""\
+Before writing, answer these three questions briefly (1-2 sentences each):
+1. What is the dominant physical sensation in this scene (not emotion — sensation)?
+2. What single physical action most reveals the POV character's internal state?
+3. What should remain unsaid but felt by the reader?
+
+After your answers, write the delimiter "{_PROSE_DELIMITER}" on its own line, \
+then write the full scene prose.
+
+"""
+
+
+def _extract_prose(raw_output: str) -> str:
+    """Strip planning answers from the LLM response, returning only the prose.
+
+    Looks for the prose delimiter. If found, returns everything after it.
+    If not found, falls back to stripping everything before the first
+    paragraph break (double newline after any non-empty content), or
+    returns the full output if no clear boundary is found.
+    """
+    # Primary: split on the delimiter
+    if _PROSE_DELIMITER in raw_output:
+        _, _, prose = raw_output.partition(_PROSE_DELIMITER)
+        return prose.strip()
+
+    # Fallback: look for numbered answers (1. ... 2. ... 3. ...) then prose
+    # Find the last numbered answer and take everything after the next blank line
+    pattern = r"^3\.\s.*?$"
+    match = re.search(pattern, raw_output, re.MULTILINE)
+    if match:
+        after_answers = raw_output[match.end() :]
+        # Skip to the next non-empty line after the answers
+        stripped = after_answers.lstrip("\n")
+        if stripped:
+            return stripped.strip()
+
+    # Last resort: return as-is
+    return raw_output.strip()
 
 
 def _get_scene_and_characters(state: dict):
@@ -42,7 +86,7 @@ def _get_scene_and_characters(state: dict):
 def run_scene_writer(state: dict) -> dict:
     """Execute the Scene Writer: scene outline + context → SceneDraft."""
     settings = get_settings()
-    temp = settings.default_temperature
+    temp = settings.creative_temperature
 
     scene_outline, characters = _get_scene_and_characters(state)
     story_brief = state["story_brief"]
@@ -176,16 +220,27 @@ def run_scene_writer(state: dict) -> dict:
     revision_label = f" (revision {revision_count})" if revision_count > 0 else ""
     logger.info("Writing scene %d%s...", scene_outline.scene_number, revision_label)
 
-    llm = get_llm(temperature=temp)
+    llm = get_llm(
+        temperature=temp,
+        frequency_penalty=settings.frequency_penalty,
+        presence_penalty=settings.presence_penalty,
+    )
+
+    # Prepend planning questions to the user message for first drafts
+    user_content = f"Write the scene:\n\n{scene_context}"
+    if revision_count == 0:
+        user_content = _PLANNING_PREAMBLE + user_content
+
     response = invoke(
         llm,
         [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Write the scene:\n\n{scene_context}"},
+            {"role": "user", "content": user_content},
         ],
     )
 
-    prose = str(response.content)
+    raw_output = str(response.content)
+    prose = _extract_prose(raw_output) if revision_count == 0 else raw_output
     word_count = len(prose.split())
 
     scene_draft = SceneDraft(
