@@ -9,7 +9,12 @@ from ai_writer.schemas.characters import (
     CharacterRole,
     CharacterRoster,
 )
-from ai_writer.schemas.editing import SceneMetrics, StyleEditorOutput
+from ai_writer.schemas.editing import (
+    EditFeedback,
+    SceneMetrics,
+    SceneRubric,
+    StyleEditorOutput,
+)
 from ai_writer.schemas.story import Genre, StoryBrief, ToneProfile
 from ai_writer.schemas.structure import ActOutline, SceneOutline, StoryOutline
 from ai_writer.schemas.world import WorldContext
@@ -249,8 +254,10 @@ class TestStyleEditor:
 
     @patch("ai_writer.agents.style_editor.invoke")
     @patch("ai_writer.agents.style_editor.get_structured_llm")
-    def test_confirmed_slop_populates_from_llm(self, mock_get_llm, mock_invoke):
-        """Verify confirmed_slop from LLM output flows to EditFeedback."""
+    def test_confirmed_slop_computed_from_set_difference(
+        self, mock_get_llm, mock_invoke
+    ):
+        """Verify confirmed_slop = flagged - dismissed flows to EditFeedback."""
         mock_output = StyleEditorOutput(
             dimension_reasoning="Some AI-isms found.",
             style_adherence=2,
@@ -258,16 +265,23 @@ class TestStyleEditor:
             outline_adherence=2,
             pacing=2,
             prose_quality=2,
-            confirmed_slop=["testament to", "tapestry of"],
+            dismissed_slop=[],
         )
         mock_invoke.return_value = mock_output
         mock_get_llm.return_value = MagicMock()
 
         state = _build_state()
+        # Multi-word slop phrases to populate raw_phrase_list
+        state["scene_drafts"][0].prose = (
+            "It was a testament to her skill. "
+            "A wave washed over her as she watched the dance of shadows."
+        )
+        state["scene_drafts"][0].word_count = 20
         result = run_style_editor(state)
 
         fb = result["edit_feedback"][0]
-        assert fb.confirmed_slop == ["testament to", "tapestry of"]
+        # With empty dismissed_slop, all multi-word phrases become confirmed
+        assert len(fb.confirmed_slop) >= 3
 
     @patch("ai_writer.agents.style_editor.invoke")
     @patch("ai_writer.agents.style_editor.get_structured_llm")
@@ -390,8 +404,8 @@ class TestScoreCaps:
 
     @patch("ai_writer.agents.style_editor.invoke")
     @patch("ai_writer.agents.style_editor.get_structured_llm")
-    def test_pacing_capped_on_opener_monotony(self, mock_get_llm, mock_invoke):
-        """LLM pacing=4 should be capped to 2 when opener_monotony fires."""
+    def test_pacing_capped_severe_on_opener_monotony(self, mock_get_llm, mock_invoke):
+        """LLM pacing=4 should be capped to 2 when severe opener_monotony fires."""
         mock_output = StyleEditorOutput(
             dimension_reasoning="All looks great.",
             style_adherence=4,
@@ -404,8 +418,8 @@ class TestScoreCaps:
         mock_get_llm.return_value = MagicMock()
 
         state = _build_state()
-        # Use extremely repetitive prose to trigger opener_monotony
-        # All sentences start with "He" -> opener_monotony fires
+        # Use extremely repetitive prose to trigger severe opener_monotony (>45%)
+        # All sentences start with "He" -> top_opener_ratio ~1.0
         sentences = ["He walked slowly. " * 20]
         state["scene_drafts"][0].prose = " ".join(sentences)
         state["scene_drafts"][0].word_count = 100
@@ -414,8 +428,76 @@ class TestScoreCaps:
         fb = result["edit_feedback"][0]
 
         if fb.rubric.opener_monotony:
-            # Score cap should have reduced pacing from 4 to 2
+            # Severe (>45%) -> hard cap at 2
             assert fb.rubric.pacing <= 2
+
+    @patch("ai_writer.agents.style_editor.invoke")
+    @patch("ai_writer.agents.style_editor.get_structured_llm")
+    def test_pacing_mild_cap_on_mild_opener_monotony(self, mock_get_llm, mock_invoke):
+        """LLM pacing=4 should be capped to 3 when mild opener_monotony fires (31-45%)."""
+        mock_output = StyleEditorOutput(
+            dimension_reasoning="All looks great.",
+            style_adherence=4,
+            character_voice=4,
+            outline_adherence=4,
+            pacing=4,  # LLM gives 4
+            prose_quality=4,
+        )
+        mock_invoke.return_value = mock_output
+        mock_get_llm.return_value = MagicMock()
+
+        state = _build_state()
+        # Build prose where ~35% start with PRON (mild, not severe)
+        # 10 sentences: 4 start with He/She, 6 start with varied POS
+        prose = (
+            "He walked to the door. The sun shone brightly. "
+            "Rain pattered on the roof. She opened the window. "
+            "Carefully, the boy stepped inside. A bird sang outside. "
+            "He looked around the room. Thunder rumbled in the distance. "
+            "Walking slowly, she crossed the room. "
+            "She sat down on the old wooden chair."
+        )
+        state["scene_drafts"][0].prose = prose
+        state["scene_drafts"][0].word_count = len(prose.split())
+
+        from ai_writer.prompts.configs import ProseStructureConfig, ScoreCapConfig
+
+        state["prompt_configs"] = {
+            "prose_structure": ProseStructureConfig(opener_monotony_threshold=0.20),
+            "score_caps": ScoreCapConfig(
+                cap_pacing_on_monotony=2,
+                severe_opener_threshold=0.45,
+            ),
+        }
+
+        result = run_style_editor(state)
+        fb = result["edit_feedback"][0]
+
+        if fb.rubric.opener_monotony and fb.rubric.top_opener_ratio <= 0.45:
+            # Mild monotony -> cap at 3 (not 2)
+            assert fb.rubric.pacing <= 3
+
+    @patch("ai_writer.agents.style_editor.invoke")
+    @patch("ai_writer.agents.style_editor.get_structured_llm")
+    def test_rubric_has_opener_detail_fields(self, mock_get_llm, mock_invoke):
+        """Verify top_opener_pos and top_opener_ratio are populated in rubric."""
+        mock_output = StyleEditorOutput(
+            dimension_reasoning="Average.",
+            style_adherence=2,
+            character_voice=2,
+            outline_adherence=2,
+            pacing=2,
+            prose_quality=2,
+        )
+        mock_invoke.return_value = mock_output
+        mock_get_llm.return_value = MagicMock()
+
+        state = _build_state()
+        result = run_style_editor(state)
+
+        fb = result["edit_feedback"][0]
+        assert isinstance(fb.rubric.top_opener_pos, str)
+        assert isinstance(fb.rubric.top_opener_ratio, float)
 
     @patch("ai_writer.agents.style_editor.invoke")
     @patch("ai_writer.agents.style_editor.get_structured_llm")
@@ -428,19 +510,24 @@ class TestScoreCaps:
             outline_adherence=4,
             pacing=4,
             prose_quality=4,  # LLM gives 4
-            confirmed_slop=["testament to", "tapestry of", "delve into"],
+            dismissed_slop=[],  # nothing dismissed -> all confirmed
         )
         mock_invoke.return_value = mock_output
         mock_get_llm.return_value = MagicMock()
 
         state = _build_state()
-        state["scene_drafts"][0].prose = " ".join(["word"] * 100)
+        # Use prose with 3+ multi-word slop phrases for confirmed_slop >= 3
+        state["scene_drafts"][0].prose = (
+            "It was a testament to her skill. A wave washed over her. "
+            'The dance of shadows played. "Run," he whispered urgently. '
+        ) + " ".join(["word"] * 80)
         state["scene_drafts"][0].word_count = 100
 
         result = run_style_editor(state)
         fb = result["edit_feedback"][0]
 
-        # 3 confirmed slop -> prose_quality capped to 2
+        # 4 multi-word confirmed slop -> prose_quality capped to 2
+        assert len(fb.confirmed_slop) >= 3
         assert fb.rubric.prose_quality <= 2
 
     @patch("ai_writer.agents.style_editor.invoke")
@@ -471,3 +558,301 @@ class TestScoreCaps:
         assert "Sentence length variety" in user_msg
         assert "Opener variety" in user_msg
         assert "Word count within tolerance" in user_msg
+
+
+class TestPersistentSlop:
+    """Tests for persistent slop detection and enforcement."""
+
+    @patch("ai_writer.agents.style_editor.invoke")
+    @patch("ai_writer.agents.style_editor.get_structured_llm")
+    def test_persistent_slop_caps_prose_to_one(self, mock_get_llm, mock_invoke):
+        """Confirmed slop surviving revision hard-caps prose_quality to 1."""
+        mock_output = StyleEditorOutput(
+            dimension_reasoning="Some issues.",
+            style_adherence=4,
+            character_voice=4,
+            outline_adherence=4,
+            pacing=4,
+            prose_quality=4,
+            dismissed_slop=[],
+        )
+        mock_invoke.return_value = mock_output
+        mock_get_llm.return_value = MagicMock()
+
+        state = _build_state()
+        # Simulate revision: prior feedback had "a silent testament to" confirmed
+        state["revision_count"] = 1
+        state["edit_feedback"] = [
+            EditFeedback(
+                scene_id="s1",
+                quality_score=0.5,
+                approved=False,
+                confirmed_slop=["a silent testament to"],
+                rubric=SceneRubric(prose_quality=2),
+            )
+        ]
+        # Prose still contains the phrase
+        state["scene_drafts"][
+            0
+        ].prose = "The station stood as a silent testament to forgotten ambition."
+        state["scene_drafts"][0].word_count = 10
+
+        result = run_style_editor(state)
+        fb = result["edit_feedback"][-1]
+
+        assert fb.rubric.persistent_slop == ["a silent testament to"]
+        assert fb.rubric.prose_quality == 1
+        assert fb.rubric.has_critical_failure() is True
+        assert fb.approved is False
+
+    @patch("ai_writer.agents.style_editor.invoke")
+    @patch("ai_writer.agents.style_editor.get_structured_llm")
+    def test_no_persistent_slop_when_phrase_removed(self, mock_get_llm, mock_invoke):
+        """When writer removes the flagged phrase, no persistence penalty."""
+        mock_output = StyleEditorOutput(
+            dimension_reasoning="Clean revision.",
+            style_adherence=4,
+            character_voice=4,
+            outline_adherence=4,
+            pacing=4,
+            prose_quality=4,
+        )
+        mock_invoke.return_value = mock_output
+        mock_get_llm.return_value = MagicMock()
+
+        state = _build_state()
+        state["revision_count"] = 1
+        state["edit_feedback"] = [
+            EditFeedback(
+                scene_id="s1",
+                quality_score=0.5,
+                approved=False,
+                confirmed_slop=["a silent testament to"],
+                rubric=SceneRubric(prose_quality=2),
+            )
+        ]
+        # Prose no longer contains the flagged phrase
+        state["scene_drafts"][0].prose = " ".join(["word"] * 100)
+        state["scene_drafts"][0].word_count = 100
+
+        result = run_style_editor(state)
+        fb = result["edit_feedback"][-1]
+
+        assert fb.rubric.persistent_slop == []
+        # prose_quality should NOT be capped to 1
+        assert fb.rubric.prose_quality > 1
+
+    @patch("ai_writer.agents.style_editor.invoke")
+    @patch("ai_writer.agents.style_editor.get_structured_llm")
+    def test_persistence_skipped_on_first_evaluation(self, mock_get_llm, mock_invoke):
+        """First evaluation (revision_count=0) should never fire persistence."""
+        mock_output = StyleEditorOutput(
+            dimension_reasoning="First eval.",
+            style_adherence=4,
+            character_voice=4,
+            outline_adherence=4,
+            pacing=4,
+            prose_quality=4,
+            dismissed_slop=[],
+        )
+        mock_invoke.return_value = mock_output
+        mock_get_llm.return_value = MagicMock()
+
+        state = _build_state()
+        # revision_count defaults to 0 in _build_state
+        state["scene_drafts"][0].prose = " ".join(["word"] * 100)
+        state["scene_drafts"][0].word_count = 100
+
+        result = run_style_editor(state)
+        fb = result["edit_feedback"][-1]
+
+        assert fb.rubric.persistent_slop == []
+
+    @patch("ai_writer.agents.style_editor.invoke")
+    @patch("ai_writer.agents.style_editor.get_structured_llm")
+    def test_persistent_slop_case_insensitive(self, mock_get_llm, mock_invoke):
+        """Persistence check should be case-insensitive."""
+        mock_output = StyleEditorOutput(
+            dimension_reasoning="Issues persist.",
+            style_adherence=4,
+            character_voice=4,
+            outline_adherence=4,
+            pacing=4,
+            prose_quality=4,
+        )
+        mock_invoke.return_value = mock_output
+        mock_get_llm.return_value = MagicMock()
+
+        state = _build_state()
+        state["revision_count"] = 1
+        state["edit_feedback"] = [
+            EditFeedback(
+                scene_id="s1",
+                quality_score=0.5,
+                approved=False,
+                confirmed_slop=["A Silent Testament To"],
+                rubric=SceneRubric(prose_quality=2),
+            )
+        ]
+        # Prose has the phrase in different case
+        state["scene_drafts"][
+            0
+        ].prose = "It stood as a silent testament to their resolve."
+        state["scene_drafts"][0].word_count = 9
+
+        result = run_style_editor(state)
+        fb = result["edit_feedback"][-1]
+
+        assert len(fb.rubric.persistent_slop) == 1
+        assert fb.rubric.prose_quality == 1
+
+
+class TestInvertedSlopBurden:
+    """Tests for Phase 4 inverted burden of proof: confirmed = flagged - dismissed."""
+
+    @patch("ai_writer.agents.style_editor.invoke")
+    @patch("ai_writer.agents.style_editor.get_structured_llm")
+    def test_confirmed_equals_flagged_minus_dismissed(self, mock_get_llm, mock_invoke):
+        """3 multi-word flagged, 1 dismissed -> 2 confirmed."""
+        mock_output = StyleEditorOutput(
+            dimension_reasoning="One phrase is contextually appropriate.",
+            slop_reasoning="'testament to' is used literally here.",
+            style_adherence=3,
+            character_voice=3,
+            outline_adherence=3,
+            pacing=3,
+            prose_quality=3,
+            dismissed_slop=["testament to"],
+        )
+        mock_invoke.return_value = mock_output
+        mock_get_llm.return_value = MagicMock()
+
+        state = _build_state()
+        state["scene_drafts"][0].prose = (
+            "It was a testament to her skill. "
+            "A wave washed over her as she watched the dance of shadows."
+        )
+        state["scene_drafts"][0].word_count = 20
+
+        result = run_style_editor(state)
+        fb = result["edit_feedback"][0]
+
+        # "testament to" dismissed, but "washed over" and "dance of" remain
+        assert "testament to" not in fb.confirmed_slop
+        assert len(fb.confirmed_slop) == 2
+
+    @patch("ai_writer.agents.style_editor.invoke")
+    @patch("ai_writer.agents.style_editor.get_structured_llm")
+    def test_all_dismissed_means_zero_confirmed(self, mock_get_llm, mock_invoke):
+        """All flagged multi-word phrases dismissed -> 0 confirmed, no cap."""
+        mock_output = StyleEditorOutput(
+            dimension_reasoning="All phrases are contextually appropriate.",
+            slop_reasoning="Both phrases are used literally.",
+            style_adherence=4,
+            character_voice=4,
+            outline_adherence=4,
+            pacing=4,
+            prose_quality=4,
+            dismissed_slop=["testament to", "dance of"],
+        )
+        mock_invoke.return_value = mock_output
+        mock_get_llm.return_value = MagicMock()
+
+        state = _build_state()
+        state["scene_drafts"][0].prose = (
+            "It was a testament to her skill. "
+            "The dance of shadows moved across the wall. "
+        ) + " ".join(["word"] * 80)
+        state["scene_drafts"][0].word_count = 100
+
+        result = run_style_editor(state)
+        fb = result["edit_feedback"][0]
+
+        assert fb.confirmed_slop == []
+
+    @patch("ai_writer.agents.style_editor.invoke")
+    @patch("ai_writer.agents.style_editor.get_structured_llm")
+    def test_empty_dismissed_means_all_confirmed(self, mock_get_llm, mock_invoke):
+        """LLM returns empty dismissed -> all multi-word flagged become confirmed."""
+        mock_output = StyleEditorOutput(
+            dimension_reasoning="All are AI-isms.",
+            style_adherence=3,
+            character_voice=3,
+            outline_adherence=3,
+            pacing=3,
+            prose_quality=3,
+            dismissed_slop=[],
+        )
+        mock_invoke.return_value = mock_output
+        mock_get_llm.return_value = MagicMock()
+
+        state = _build_state()
+        state["scene_drafts"][0].prose = (
+            "It was a testament to her skill. "
+            "A wave washed over her as she watched the dance of shadows."
+        )
+        state["scene_drafts"][0].word_count = 20
+
+        result = run_style_editor(state)
+        fb = result["edit_feedback"][0]
+
+        # All 3 multi-word phrases confirmed (single words excluded)
+        assert len(fb.confirmed_slop) == 3
+
+    @patch("ai_writer.agents.style_editor.invoke")
+    @patch("ai_writer.agents.style_editor.get_structured_llm")
+    def test_dismissed_case_insensitive(self, mock_get_llm, mock_invoke):
+        """'Testament To' dismisses 'testament to' (case insensitive)."""
+        mock_output = StyleEditorOutput(
+            dimension_reasoning="Phrase is contextually appropriate.",
+            slop_reasoning="'testament to' is used literally.",
+            style_adherence=3,
+            character_voice=3,
+            outline_adherence=3,
+            pacing=3,
+            prose_quality=3,
+            dismissed_slop=["Testament To"],  # mixed case
+        )
+        mock_invoke.return_value = mock_output
+        mock_get_llm.return_value = MagicMock()
+
+        state = _build_state()
+        state["scene_drafts"][
+            0
+        ].prose = "It was a testament to her enduring resolve and nothing more."
+        state["scene_drafts"][0].word_count = 12
+
+        result = run_style_editor(state)
+        fb = result["edit_feedback"][0]
+
+        # "testament to" should be dismissed despite case mismatch
+        assert "testament to" not in fb.confirmed_slop
+
+    @patch("ai_writer.agents.style_editor.invoke")
+    @patch("ai_writer.agents.style_editor.get_structured_llm")
+    def test_confirmed_slop_flows_to_edit_feedback(self, mock_get_llm, mock_invoke):
+        """confirmed_slop computed by set difference appears in EditFeedback."""
+        mock_output = StyleEditorOutput(
+            dimension_reasoning="Issues found.",
+            style_adherence=2,
+            character_voice=2,
+            outline_adherence=2,
+            pacing=2,
+            prose_quality=2,
+            dismissed_slop=[],
+        )
+        mock_invoke.return_value = mock_output
+        mock_get_llm.return_value = MagicMock()
+
+        state = _build_state()
+        state["scene_drafts"][
+            0
+        ].prose = "It was a testament to her skill and nothing more."
+        state["scene_drafts"][0].word_count = 10
+
+        result = run_style_editor(state)
+        fb = result["edit_feedback"][0]
+
+        # EditFeedback.confirmed_slop should contain multi-word phrases
+        assert isinstance(fb.confirmed_slop, list)
+        assert "testament to" in fb.confirmed_slop

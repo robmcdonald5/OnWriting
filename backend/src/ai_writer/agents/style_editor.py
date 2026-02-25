@@ -156,10 +156,10 @@ def run_style_editor(state: dict) -> dict:
     # Inject slop scan results as advisory context for the LLM
     if slop_result.found_phrases:
         eval_context += (
-            "\n## Flagged Phrases (potential AI-isms)\n"
-            "The following phrases were detected by automated scan. "
-            "Judge whether each is appropriate in this story's context "
-            "or a generic LLM-ism that weakens the prose:\n"
+            "\n## Flagged Phrases — Presumed Confirmed AI-isms\n"
+            "The following phrases are PRESUMED to be AI-isms and WILL BE "
+            "flagged for mandatory replacement unless you explicitly dismiss "
+            "them in the dismissed_slop field with evidence.\n"
         )
         for phrase in slop_result.found_phrases:
             eval_context += f"- {phrase}\n"
@@ -222,10 +222,11 @@ def run_style_editor(state: dict) -> dict:
     # The actual cap is applied post-LLM via ScoreCapConfig.
     prose_slop_pass = not slop_result.found_phrases
     prose_vocab_pass = not vocab_result.vocabulary_basic
+    phrase_count = len(slop_result.raw_phrase_list)
     eval_context += "\n### Prose Quality\n"
     eval_context += (
         f"(a) Zero confirmed AI-isms: "
-        f"{'PASS (no phrases flagged)' if prose_slop_pass else 'PENDING — you must evaluate flagged phrases above'}\n"
+        f"{'PASS (no phrases flagged)' if prose_slop_pass else f'PENDING — {phrase_count} phrases presumed confirmed unless dismissed'}\n"
     )
     eval_context += (
         f"(b) Vocabulary not basic: " f"{'PASS' if prose_vocab_pass else 'FAIL'}\n"
@@ -254,6 +255,40 @@ def run_style_editor(state: dict) -> dict:
     )
     llm_output: StyleEditorOutput = raw_output  # type: ignore[assignment]
 
+    # ── Inverted burden: confirmed = flagged - dismissed ──
+    dismissed_set = {p.lower().strip() for p in llm_output.dismissed_slop}
+    confirmed_slop = [
+        p for p in slop_result.raw_phrase_list if p.lower() not in dismissed_set
+    ]
+    if confirmed_slop:
+        logger.info(
+            "Confirmed slop (%d phrases): %s", len(confirmed_slop), confirmed_slop
+        )
+    if dismissed_set:
+        logger.info(
+            "Dismissed slop (%d phrases): %s", len(dismissed_set), list(dismissed_set)
+        )
+
+    # ── Slop persistence check ──
+    # After revision, check if confirmed slop from prior feedback survived.
+    persistent_slop: list[str] = []
+    revision_count = state.get("revision_count", 0)
+    if revision_count > 0:
+        prior_feedback_list = state.get("edit_feedback", [])
+        if prior_feedback_list:
+            prior_confirmed = prior_feedback_list[-1].confirmed_slop
+            prose_lower = prose.lower()
+            for phrase in prior_confirmed:
+                if phrase.lower() in prose_lower:
+                    persistent_slop.append(phrase)
+            if persistent_slop:
+                logger.warning(
+                    "Persistent slop (%d/%d survived): %s",
+                    len(persistent_slop),
+                    len(prior_confirmed),
+                    persistent_slop,
+                )
+
     # ── Deterministic score caps ──
     # Apply hard caps based on automated analysis. The LLM provides baseline
     # scores and reasoning, but Python enforces constraints the LLM may ignore.
@@ -261,7 +296,16 @@ def run_style_editor(state: dict) -> dict:
 
     capped_pacing = llm_output.pacing
     if structure_result.opener_monotony or structure_result.length_monotony:
-        capped_pacing = min(capped_pacing, cap_config.cap_pacing_on_monotony)
+        severe = (
+            structure_result.top_opener_ratio > cap_config.severe_opener_threshold
+            or structure_result.length_monotony
+        )
+        cap = (
+            cap_config.cap_pacing_on_monotony
+            if severe
+            else cap_config.cap_pacing_on_monotony + 1
+        )
+        capped_pacing = min(capped_pacing, cap)
         if capped_pacing < llm_output.pacing:
             logger.info(
                 "Score cap: pacing %d -> %d (structural monotony)",
@@ -270,14 +314,14 @@ def run_style_editor(state: dict) -> dict:
             )
 
     capped_prose = llm_output.prose_quality
-    if len(llm_output.confirmed_slop) >= cap_config.cap_prose_on_slop_count:
+    if len(confirmed_slop) >= cap_config.cap_prose_on_slop_count:
         capped_prose = min(capped_prose, cap_config.cap_prose_on_slop_value)
         if capped_prose < llm_output.prose_quality:
             logger.info(
                 "Score cap: prose_quality %d -> %d (%d confirmed AI-isms)",
                 llm_output.prose_quality,
                 capped_prose,
-                len(llm_output.confirmed_slop),
+                len(confirmed_slop),
             )
     if vocab_result.low_diversity:
         capped_prose = min(capped_prose, cap_config.cap_prose_on_low_diversity)
@@ -287,6 +331,13 @@ def run_style_editor(state: dict) -> dict:
                 llm_output.prose_quality,
                 capped_prose,
             )
+    if persistent_slop:
+        capped_prose = min(capped_prose, cap_config.cap_prose_on_persistent_slop)
+        logger.info(
+            "Score cap: prose_quality -> %d (persistent slop: %s)",
+            capped_prose,
+            persistent_slop,
+        )
 
     # ── Layer 3: Algorithmic composite score (Python) ──
 
@@ -296,6 +347,8 @@ def run_style_editor(state: dict) -> dict:
         tense_consistent=tense_result.consistent,
         slop_ratio=slop_result.slop_ratio,
         # Structural analysis (advisory)
+        top_opener_pos=structure_result.top_opener_pos,
+        top_opener_ratio=structure_result.top_opener_ratio,
         opener_monotony=structure_result.opener_monotony,
         length_monotony=structure_result.length_monotony,
         passive_heavy=structure_result.passive_heavy,
@@ -305,6 +358,8 @@ def run_style_editor(state: dict) -> dict:
         vocabulary_basic=vocab_result.vocabulary_basic,
         # Cross-scene
         cross_scene_repetitions=repetition_result.repeated_count,
+        # Slop persistence
+        persistent_slop=persistent_slop,
         # LLM dimensions (with deterministic caps applied)
         style_adherence=llm_output.style_adherence,
         character_voice=llm_output.character_voice,
@@ -323,7 +378,7 @@ def run_style_editor(state: dict) -> dict:
         approved=approved,
         overall_assessment=llm_output.overall_assessment,
         revision_instructions=llm_output.revision_instructions,
-        confirmed_slop=llm_output.confirmed_slop,
+        confirmed_slop=confirmed_slop,
         rubric=rubric,
     )
 
