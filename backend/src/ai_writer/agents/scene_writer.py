@@ -21,10 +21,11 @@ _PROSE_DELIMITER = "---PROSE---"
 
 # Planning questions prepended to the user message to force concrete choices
 _PLANNING_PREAMBLE = f"""\
-Before writing, answer these three questions briefly (1-2 sentences each):
+Before writing, answer these four questions briefly (1-2 sentences each):
 1. What is the dominant physical sensation in this scene (not emotion — sensation)?
 2. What single physical action most reveals the POV character's internal state?
 3. What should remain unsaid but felt by the reader?
+4. List 4 different sentence-opening strategies you will use (e.g., action verb, dialogue, subordinate clause, sensory image).
 
 After your answers, write the delimiter "{_PROSE_DELIMITER}" on its own line, \
 then write the full scene prose.
@@ -47,7 +48,7 @@ def _extract_prose(raw_output: str) -> str:
 
     # Fallback: look for numbered answers (1. ... 2. ... 3. ...) then prose
     # Find the last numbered answer and take everything after the next blank line
-    pattern = r"^3\.\s.*?$"
+    pattern = r"^4\.\s.*?$"
     match = re.search(pattern, raw_output, re.MULTILINE)
     if match:
         after_answers = raw_output[match.end() :]
@@ -159,8 +160,20 @@ def run_scene_writer(state: dict) -> dict:
 
             # Build confirmed slop section
             confirmed_slop = getattr(latest_feedback, "confirmed_slop", [])
+            persistent = getattr(latest_feedback.rubric, "persistent_slop", [])
+
             if confirmed_slop:
-                slop_lines = [f'- REPLACE: "{phrase}"' for phrase in confirmed_slop]
+                slop_lines = []
+                for phrase in confirmed_slop:
+                    if phrase in persistent:
+                        slop_lines.append(
+                            f'- MANDATORY REPLACE: "{phrase}" — this was flagged '
+                            f"in the previous revision and STILL appears. You "
+                            f"MUST remove it. The scene WILL BE REJECTED if it "
+                            f"remains."
+                        )
+                    else:
+                        slop_lines.append(f'- REPLACE: "{phrase}"')
                 confirmed_slop_section = "\n".join(slop_lines)
             else:
                 confirmed_slop_section = "None identified."
@@ -168,9 +181,21 @@ def run_scene_writer(state: dict) -> dict:
             # Build structural issues section
             struct_issues = []
             if rubric.opener_monotony:
+                pos_label = {
+                    "PRON": "pronouns (He, She, They, I)",
+                    "DET": "articles/determiners (The, A, This)",
+                    "NOUN": "proper nouns/names",
+                    "ADV": "adverbs",
+                }.get(rubric.top_opener_pos, rubric.top_opener_pos)
+
                 struct_issues.append(
-                    "VARY: Sentence openings are monotonous — vary your "
-                    "sentence starters instead of starting most with pronouns"
+                    f"VARY: {rubric.top_opener_ratio:.0%} of sentences start with "
+                    f"{pos_label}. Target below 30%. Rewrite using: "
+                    "participial phrases ('Crossing the threshold, ...'), "
+                    "prepositional phrases ('In the half-light, ...'), "
+                    "dependent clauses ('When the door opened, ...'), "
+                    "sensory details ('Cold air bit ...'), "
+                    "or dialogue."
                 )
             if rubric.length_monotony:
                 struct_issues.append(

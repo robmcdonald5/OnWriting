@@ -114,6 +114,10 @@ Apply these in every sentence:
 - Use concrete sensory detail (texture, temperature, sound, smell) over abstract description
 - Vary sentence length deliberately: long sentence → short punch. Never let 3+ sentences \
 in a row share the same approximate length
+- Never start 3 consecutive sentences with the same part of speech (especially pronouns). \
+Alternate: action verb ("The door swung..."), setting detail ("Cold air filled..."), \
+dialogue, subordinate clause ("When...", "After...", "Though..."), \
+participial phrase ("Gripping the rail, he...")
 - Dialogue must contain subtext — characters deflect, evade, change the subject. \
 They do not answer questions directly or explain their feelings aloud
 - Prefer monosyllabic Anglo-Saxon words over Latinate polysyllables when both work
@@ -250,9 +254,21 @@ You will receive automated analysis sections (Flagged Phrases, Overused Words,
 Structural Analysis, Vocabulary Analysis, Cross-Scene Repetitions) appended to
 the scene context.
 
-1. For Flagged Phrases: In dimension_reasoning, state which flagged phrases are
-   genuine AI-isms vs. contextually appropriate. Add confirmed AI-isms to the
-   confirmed_slop field (exact quotes).
+1. For Flagged Phrases: ALL flagged phrases are PRESUMED CONFIRMED as AI-isms.
+   They will be sent to the writer as mandatory replacements UNLESS you
+   explicitly dismiss them.
+
+   To dismiss a phrase, you must:
+   - Add it to the dismissed_slop field (exact lowercase quote)
+   - In slop_reasoning, cite the EXACT sentence where it appears
+   - Explain why this specific usage has no viable alternative
+   - Tiebreaker: when uncertain, the phrase REMAINS CONFIRMED
+
+   Example valid dismissal: "towards" in "He walked towards the door" —
+   this is literal physical movement with no natural synonym.
+
+   Example invalid dismissal: "flickered" in "Hope flickered in her eyes" —
+   "surfaced", "stirred", or a concrete physical action works better.
 
 2. For Structural/Vocabulary Flags: Address these in your dimension_reasoning.
    Note: score caps for structural and vocabulary issues are applied
@@ -298,15 +314,18 @@ This is revision #{revision_count}.
 
 {focus_dimensions}
 
-### Confirmed AI-isms to Replace
+### Confirmed AI-isms — MANDATORY Replacements
 {confirmed_slop_section}
+
+These are NOT suggestions. Every phrase above MUST be removed from your prose
+entirely. Replace with completely different wording — do not rephrase.
+If ANY confirmed AI-ism appears verbatim in your revision, the scene WILL BE
+REJECTED.
 
 ### Structural Issues to Address
 {structural_issues_section}
 
-Address ALL items above. For confirmed AI-isms, replace each quoted phrase with
-something more specific and original. For structural issues, actively vary your
-sentence patterns."""
+For structural issues, actively vary your sentence patterns."""
 
 # ── Conditional: Polish Addendum (Scene Writer only) ──────────────
 # Appended when revision_count > 0 but draft was already approved
@@ -331,8 +350,11 @@ are working well.
 
 {focus_dimensions}
 
-### Confirmed AI-isms to Replace
+### Confirmed AI-isms — MANDATORY Replacements
 {confirmed_slop_section}
+
+Even in a polish pass, confirmed AI-isms MUST be removed. Replace with
+completely different wording. The scene will be rejected if any remain.
 
 ### Structural Refinements
 {structural_issues_section}

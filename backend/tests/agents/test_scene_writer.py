@@ -286,6 +286,8 @@ class TestSceneWriter:
                     pacing=2,
                     prose_quality=2,
                     opener_monotony=True,
+                    top_opener_pos="PRON",
+                    top_opener_ratio=0.45,
                     low_diversity=True,
                 ),
             )
@@ -299,8 +301,71 @@ class TestSceneWriter:
         call_args = mock_llm.invoke.call_args[0][0]
         system_msg = call_args[0]["content"]
         assert "VARY" in system_msg
-        assert "monotonous" in system_msg.lower() or "openings" in system_msg.lower()
         assert "diversity" in system_msg.lower() or "vocabulary" in system_msg.lower()
+
+    @patch("ai_writer.agents.scene_writer.get_llm")
+    @patch("ai_writer.agents.scene_writer.get_settings")
+    def test_revision_prescriptive_opener_feedback(self, mock_settings, mock_get_llm):
+        """Verify opener monotony feedback is prescriptive with stats and alternatives."""
+        mock_settings.return_value = MagicMock(
+            creative_temperature=1.3,
+            frequency_penalty=0.5,
+            presence_penalty=0.3,
+        )
+
+        mock_response = MagicMock()
+        mock_response.content = "Revised prose with varied openers."
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = mock_response
+        mock_get_llm.return_value = mock_llm
+
+        from ai_writer.schemas.writing import SceneDraft
+
+        existing = [
+            SceneDraft(
+                scene_id="s1",
+                act_number=1,
+                scene_number=1,
+                prose="Old.",
+                word_count=1,
+            )
+        ]
+        feedback = [
+            EditFeedback(
+                scene_id="s1",
+                quality_score=0.5,
+                approved=False,
+                revision_instructions="Fix openers.",
+                rubric=SceneRubric(
+                    style_adherence=2,
+                    character_voice=2,
+                    outline_adherence=2,
+                    pacing=2,
+                    prose_quality=2,
+                    opener_monotony=True,
+                    top_opener_pos="PRON",
+                    top_opener_ratio=0.45,
+                ),
+            )
+        ]
+
+        state = _build_state(
+            revision_count=1, existing_drafts=existing, edit_feedback=feedback
+        )
+        run_scene_writer(state)
+
+        call_args = mock_llm.invoke.call_args[0][0]
+        system_msg = call_args[0]["content"]
+        # Should include the percentage
+        assert "45%" in system_msg
+        # Should include the POS label
+        assert "pronouns" in system_msg.lower()
+        # Should include concrete alternatives
+        assert "participial" in system_msg.lower()
+        assert "prepositional" in system_msg.lower()
+        assert (
+            "dependent clause" in system_msg.lower() or "clauses" in system_msg.lower()
+        )
 
     @patch("ai_writer.agents.scene_writer.get_llm")
     @patch("ai_writer.agents.scene_writer.get_settings")
@@ -556,9 +621,135 @@ class TestExtractProse:
         assert _extract_prose(raw) == "The ship moved slowly."
 
     def test_fallback_numbered_answers(self):
-        raw = "1. Cold air.\n2. She grips the wheel.\n3. Fear unsaid.\n\nThe hull creaked."
+        raw = (
+            "1. Cold air.\n2. She grips the wheel.\n3. Fear unsaid.\n"
+            "4. Action verb, dialogue, subordinate clause, sensory image.\n\n"
+            "The hull creaked."
+        )
         assert _extract_prose(raw) == "The hull creaked."
 
     def test_no_planning_returns_as_is(self):
         raw = "The station hummed quietly as Captain stood by the viewport."
         assert _extract_prose(raw) == raw
+
+
+class TestPersistentSlopEscalation:
+    """Tests for escalated MANDATORY REPLACE language on persistent slop."""
+
+    @patch("ai_writer.agents.scene_writer.get_llm")
+    @patch("ai_writer.agents.scene_writer.get_settings")
+    def test_persistent_slop_gets_mandatory_replace(self, mock_settings, mock_get_llm):
+        """Persistent phrases should use MANDATORY REPLACE in revision prompt."""
+        mock_settings.return_value = MagicMock(
+            creative_temperature=1.3,
+            frequency_penalty=0.5,
+            presence_penalty=0.3,
+        )
+
+        mock_response = MagicMock()
+        mock_response.content = "Revised prose."
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = mock_response
+        mock_get_llm.return_value = mock_llm
+
+        from ai_writer.schemas.writing import SceneDraft
+
+        existing = [
+            SceneDraft(
+                scene_id="s1",
+                act_number=1,
+                scene_number=1,
+                prose="Old.",
+                word_count=1,
+            )
+        ]
+        feedback = [
+            EditFeedback(
+                scene_id="s1",
+                quality_score=0.3,
+                approved=False,
+                revision_instructions="Fix AI-isms.",
+                confirmed_slop=["a silent testament to", "tapestry of"],
+                rubric=SceneRubric(
+                    style_adherence=2,
+                    character_voice=2,
+                    outline_adherence=2,
+                    pacing=2,
+                    prose_quality=1,
+                    persistent_slop=["a silent testament to"],
+                ),
+            )
+        ]
+
+        state = _build_state(
+            revision_count=1, existing_drafts=existing, edit_feedback=feedback
+        )
+        run_scene_writer(state)
+
+        call_args = mock_llm.invoke.call_args[0][0]
+        system_msg = call_args[0]["content"]
+
+        # Persistent phrase should get MANDATORY REPLACE
+        assert 'MANDATORY REPLACE: "a silent testament to"' in system_msg
+        assert "WILL BE REJECTED" in system_msg
+        # Non-persistent phrase should get regular REPLACE
+        assert 'REPLACE: "tapestry of"' in system_msg
+        # Should NOT have MANDATORY on the non-persistent one
+        assert 'MANDATORY REPLACE: "tapestry of"' not in system_msg
+
+    @patch("ai_writer.agents.scene_writer.get_llm")
+    @patch("ai_writer.agents.scene_writer.get_settings")
+    def test_no_persistent_slop_uses_regular_replace(self, mock_settings, mock_get_llm):
+        """When no persistent slop, all phrases should use regular REPLACE."""
+        mock_settings.return_value = MagicMock(
+            creative_temperature=1.3,
+            frequency_penalty=0.5,
+            presence_penalty=0.3,
+        )
+
+        mock_response = MagicMock()
+        mock_response.content = "Revised prose."
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = mock_response
+        mock_get_llm.return_value = mock_llm
+
+        from ai_writer.schemas.writing import SceneDraft
+
+        existing = [
+            SceneDraft(
+                scene_id="s1",
+                act_number=1,
+                scene_number=1,
+                prose="Old.",
+                word_count=1,
+            )
+        ]
+        feedback = [
+            EditFeedback(
+                scene_id="s1",
+                quality_score=0.5,
+                approved=False,
+                revision_instructions="Fix AI-isms.",
+                confirmed_slop=["testament to", "tapestry of"],
+                rubric=SceneRubric(
+                    style_adherence=2,
+                    character_voice=2,
+                    outline_adherence=2,
+                    pacing=2,
+                    prose_quality=2,
+                    persistent_slop=[],
+                ),
+            )
+        ]
+
+        state = _build_state(
+            revision_count=1, existing_drafts=existing, edit_feedback=feedback
+        )
+        run_scene_writer(state)
+
+        call_args = mock_llm.invoke.call_args[0][0]
+        system_msg = call_args[0]["content"]
+
+        assert "MANDATORY REPLACE" not in system_msg
+        assert 'REPLACE: "testament to"' in system_msg
+        assert 'REPLACE: "tapestry of"' in system_msg
