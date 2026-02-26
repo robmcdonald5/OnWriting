@@ -98,6 +98,44 @@ class TestComputeProseStructure:
         result_lenient = compute_prose_structure(prose, lenient)
         assert result_lenient.opener_monotony is False
 
+    def test_opener_distribution_populated(self):
+        """opener_distribution should contain POS ratios for all opener types."""
+        prose = (
+            "He walked to the door. She opened it slowly. The light flickered. "
+            "Rain pattered outside. He sat down on the chair."
+        )
+        result = compute_prose_structure(prose)
+        assert isinstance(result.opener_distribution, dict)
+        assert len(result.opener_distribution) > 0
+        # All values should sum to ~1.0
+        total = sum(result.opener_distribution.values())
+        assert abs(total - 1.0) < 0.01
+        # Top opener should be in the distribution
+        assert result.top_opener_pos in result.opener_distribution
+
+    def test_opener_distribution_empty_for_empty_prose(self):
+        """opener_distribution should be empty for empty prose."""
+        result = compute_prose_structure("")
+        assert result.opener_distribution == {}
+
+    def test_summary_lines_includes_distribution(self):
+        """summary_lines() should include POS distribution when opener_monotony flagged."""
+        result = ProseStructureResult(
+            sentence_count=5,
+            opener_monotony=True,
+            top_opener_pos="PRON",
+            top_opener_ratio=0.8,
+            opener_distribution={"PRON": 0.8, "DET": 0.2},
+            length_monotony=False,
+            passive_heavy=False,
+            structural_monotony=False,
+        )
+        lines = result.summary_lines()
+        assert len(lines) == 1
+        assert "PRON" in lines[0]
+        assert "distribution" in lines[0]
+        assert "80%" in lines[0]
+
     def test_summary_lines_only_flagged(self):
         """summary_lines() should only include flagged issues."""
         result = ProseStructureResult(
@@ -105,6 +143,7 @@ class TestComputeProseStructure:
             opener_monotony=True,
             top_opener_pos="PRON",
             top_opener_ratio=0.8,
+            opener_distribution={"PRON": 0.8, "DET": 0.2},
             length_monotony=False,
             passive_heavy=False,
             structural_monotony=False,

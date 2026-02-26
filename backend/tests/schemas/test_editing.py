@@ -71,19 +71,21 @@ class TestStyleEditorOutput:
         )
         assert output.style_adherence == 4
 
-    def test_confirmed_slop_field(self):
+    def test_slop_reasoning_field(self):
         output = StyleEditorOutput(
             dimension_reasoning="Evidence.",
+            slop_reasoning="'towards' is literal movement, dismissing.",
+            dismissed_slop=["towards"],
             style_adherence=2,
             character_voice=2,
             outline_adherence=2,
             pacing=2,
             prose_quality=2,
-            confirmed_slop=["testament to", "tapestry of"],
         )
-        assert output.confirmed_slop == ["testament to", "tapestry of"]
+        assert output.slop_reasoning == "'towards' is literal movement, dismissing."
+        assert output.dismissed_slop == ["towards"]
 
-    def test_confirmed_slop_defaults_empty(self):
+    def test_dismissed_slop_defaults_empty(self):
         output = StyleEditorOutput(
             dimension_reasoning="Evidence.",
             style_adherence=2,
@@ -92,12 +94,22 @@ class TestStyleEditorOutput:
             pacing=2,
             prose_quality=2,
         )
-        assert output.confirmed_slop == []
+        assert output.dismissed_slop == []
+        assert output.slop_reasoning == ""
 
     def test_reasoning_first_field(self):
         """dimension_reasoning should be the first field for critique-before-score."""
         fields = list(StyleEditorOutput.model_fields.keys())
         assert fields[0] == "dimension_reasoning"
+
+    def test_slop_fields_before_scores(self):
+        """slop_reasoning and dismissed_slop should come before score fields."""
+        fields = list(StyleEditorOutput.model_fields.keys())
+        slop_idx = fields.index("slop_reasoning")
+        dismissed_idx = fields.index("dismissed_slop")
+        style_idx = fields.index("style_adherence")
+        assert slop_idx < style_idx
+        assert dismissed_idx < style_idx
 
 
 class TestSceneRubric:

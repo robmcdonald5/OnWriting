@@ -60,17 +60,30 @@ class StyleEditorOutput(BaseModel):
     dimension_reasoning: str = Field(
         description="Evidence-based reasoning for each dimension score"
     )
+
+    # Slop evaluation (BEFORE scores — critique before scoring)
+    slop_reasoning: str = Field(
+        default="",
+        description=(
+            "For each flagged phrase, state whether it should be DISMISSED "
+            "(contextually appropriate) or remains CONFIRMED. "
+            "To dismiss, cite the exact sentence and explain why no alternative exists."
+        ),
+    )
+    dismissed_slop: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Phrases from Flagged Phrases that are contextually appropriate "
+            "and should NOT be treated as AI-isms (exact quotes, lowercase). "
+            "Only include phrases you can justify keeping."
+        ),
+    )
+
     style_adherence: int = Field(ge=1, le=4)
     character_voice: int = Field(ge=1, le=4)
     outline_adherence: int = Field(ge=1, le=4)
     pacing: int = Field(ge=1, le=4)
     prose_quality: int = Field(ge=1, le=4)
-    confirmed_slop: list[str] = Field(
-        default_factory=list,
-        description=(
-            "Phrases from Flagged Phrases confirmed as genuine AI-isms (exact quotes)"
-        ),
-    )
     revision_instructions: str = Field(
         default="",
         description="Specific revision instructions if quality is insufficient",
@@ -117,6 +130,10 @@ class SceneRubric(BaseModel):
     pacing: int = Field(default=2, ge=1, le=4)
     prose_quality: int = Field(default=2, ge=1, le=4)
 
+    # --- Opener detail (for prescriptive revision feedback) ---
+    top_opener_pos: str = Field(default="")
+    top_opener_ratio: float = Field(default=0.0, ge=0.0, le=1.0)
+
     # --- Structural analysis (advisory, soft penalty) ---
     opener_monotony: bool = Field(default=False)
     length_monotony: bool = Field(default=False)
@@ -129,6 +146,12 @@ class SceneRubric(BaseModel):
 
     # --- Cross-scene analysis ---
     cross_scene_repetitions: int = Field(default=0)
+
+    # --- Slop persistence (enforcement) ---
+    persistent_slop: list[str] = Field(
+        default_factory=list,
+        description="Confirmed slop phrases from prior feedback that survived revision",
+    )
 
     # --- Chain-of-thought reasoning ---
     dimension_reasoning: str = Field(default="")

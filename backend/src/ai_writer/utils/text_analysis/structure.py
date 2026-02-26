@@ -9,7 +9,7 @@ All analysis reuses the lazy-cached spaCy model from basics._get_nlp().
 
 from collections import Counter
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ai_writer.prompts.configs import ProseStructureConfig
 from ai_writer.utils.text_analysis.basics import _get_nlp
@@ -24,6 +24,7 @@ class ProseStructureResult:
     top_opener_pos: str = ""  # e.g. "PRON"
     top_opener_ratio: float = 0.0  # e.g. 0.45 = 45% start with pronoun
     opener_monotony: bool = False  # True if top_opener_ratio > threshold
+    opener_distribution: dict[str, float] = field(default_factory=dict)
     # Sentence length variation
     sent_length_mean: float = 0.0
     sent_length_std: float = 0.0
@@ -42,9 +43,18 @@ class ProseStructureResult:
         """Return human-readable summary lines for flagged issues only."""
         lines: list[str] = []
         if self.opener_monotony:
+            dist_parts = [
+                f"{pos} {r:.0%}"
+                for pos, r in sorted(
+                    self.opener_distribution.items(),
+                    key=lambda x: x[1],
+                    reverse=True,
+                )[:4]
+            ]
+            dist_str = f" (distribution: {', '.join(dist_parts)})" if dist_parts else ""
             lines.append(
-                f"Sentence opener monotony: {self.top_opener_ratio:.0%} of sentences "
-                f"start with {self.top_opener_pos}"
+                f"Sentence opener monotony: {self.top_opener_ratio:.0%} start with "
+                f"{self.top_opener_pos}{dist_str}"
             )
         if self.length_monotony:
             lines.append(f"Sentence length CV: {self.sent_length_cv:.2f} — low variety")
@@ -114,8 +124,13 @@ def compute_prose_structure(
     if opener_pos_counts:
         top_pos, top_count = opener_pos_counts.most_common(1)[0]
         top_ratio = top_count / sentence_count
+        opener_dist = {
+            pos: round(count / sentence_count, 3)
+            for pos, count in opener_pos_counts.most_common()
+        }
     else:
         top_pos, top_ratio = "", 0.0
+        opener_dist = {}
 
     # --- Sentence length variation ---
     sent_lengths = [
@@ -151,6 +166,7 @@ def compute_prose_structure(
         top_opener_pos=top_pos,
         top_opener_ratio=round(top_ratio, 3),
         opener_monotony=top_ratio > config.opener_monotony_threshold,
+        opener_distribution=opener_dist,
         # Sentence length
         sent_length_mean=round(length_mean, 1),
         sent_length_std=round(length_std, 1),

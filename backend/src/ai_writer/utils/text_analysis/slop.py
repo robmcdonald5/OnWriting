@@ -13,7 +13,11 @@ import re
 from dataclasses import dataclass, field
 
 from ai_writer.prompts.configs import SlopConfig
-from ai_writer.utils.slop_data import get_slop_phrases, get_slop_words
+from ai_writer.utils.slop_data import (
+    get_custom_phrases,
+    get_slop_phrases,
+    get_slop_words,
+)
 
 # --- Phrase Pattern Cache ---
 
@@ -21,7 +25,10 @@ _compiled_phrases: list[tuple[re.Pattern[str], float, str]] | None = None
 
 
 def _get_compiled_phrases() -> list[tuple[re.Pattern[str], float, str]]:
-    """Compile phrase patterns from vendored data (cached after first call).
+    """Compile phrase patterns from vendored + custom data (cached after first call).
+
+    Merges vendored phrases with project-specific custom phrases.
+    For duplicates, the higher penalty weight wins.
 
     Returns list of (compiled_pattern, penalty_weight, original_phrase).
     """
@@ -29,15 +36,21 @@ def _get_compiled_phrases() -> list[tuple[re.Pattern[str], float, str]]:
     if _compiled_phrases is not None:
         return _compiled_phrases
 
-    phrases = get_slop_phrases(min_severity=0.0)
+    # Merge vendored + custom, max weight wins for duplicates
+    phrase_weights: dict[str, float] = {}
+    for phrase, weight in get_slop_phrases(min_severity=0.0):
+        phrase_weights[phrase.strip().lower()] = weight
+    for phrase, weight in get_custom_phrases():
+        key = phrase.strip().lower()
+        phrase_weights[key] = max(phrase_weights.get(key, 0.0), weight)
+
     compiled: list[tuple[re.Pattern[str], float, str]] = []
-    for phrase, weight in phrases:
-        stripped = phrase.strip()
-        if len(stripped) < 3:
+    for phrase, weight in phrase_weights.items():
+        if len(phrase) < 3:
             continue
         try:
-            pattern = re.compile(rf"\b{re.escape(stripped)}\b", re.IGNORECASE)
-            compiled.append((pattern, weight, stripped))
+            pattern = re.compile(rf"\b{re.escape(phrase)}\b", re.IGNORECASE)
+            compiled.append((pattern, weight, phrase))
         except re.error:
             continue
 
@@ -57,6 +70,8 @@ class SlopResult:
     unique_phrase_count: int = 0  # distinct phrases found
     # Word-level results
     found_words: dict[str, int] = field(default_factory=dict)  # word -> excess count
+    # Multi-word phrases only for confirmed_slop chain (no single words, no weights)
+    raw_phrase_list: list[str] = field(default_factory=list)
     # Debugging
     weighted_penalty: float = 0.0  # raw penalty before ratio computation
 
@@ -164,5 +179,6 @@ def compute_slop_score(
         phrase_count=total_phrase_hits,
         unique_phrase_count=len(phrase_groups),
         found_words=found_words,
+        raw_phrase_list=[k for k in phrase_groups if len(k.split()) >= 2],
         weighted_penalty=round(weighted_penalty, 3),
     )

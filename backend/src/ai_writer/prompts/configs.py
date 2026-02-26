@@ -127,9 +127,11 @@ class ScoreCapConfig(BaseModel):
     """
 
     cap_pacing_on_monotony: int = 2
+    severe_opener_threshold: float = 0.45  # above this = hard cap at 2
     cap_prose_on_slop_count: int = 3  # threshold: confirmed_slop >= this
     cap_prose_on_slop_value: int = 2  # cap to this value
     cap_prose_on_low_diversity: int = 3
+    cap_prose_on_persistent_slop: int = 1  # any persistent slop = critical failure
 
 
 class AdvisoryPenaltyConfig(BaseModel):
@@ -207,9 +209,11 @@ class PrototypeConfig(BaseModel):
 
     # ── Score Caps (deterministic overrides after LLM scoring) ──────
     cap_pacing_on_monotony: int = 2
+    severe_opener_threshold: float = 0.45
     cap_prose_on_slop_count: int = 3
     cap_prose_on_slop_value: int = 2
     cap_prose_on_low_diversity: int = 3
+    cap_prose_on_persistent_slop: int = 1
 
     # ── Advisory Penalty Values ─────────────────────────────────────
     penalty_opener_monotony: float = 0.04
@@ -237,6 +241,11 @@ class PrototypeConfig(BaseModel):
     slop_word_excess_weight: float = 0.3
     slop_word_min_severity: float = 0.5
     slop_word_free_occurrences: int = 1
+
+    # ── Creative Sampling (Scene Writer only) ────────────────────────
+    creative_temperature: float = 1.3
+    frequency_penalty: float = 0.5
+    presence_penalty: float = 0.3
 
     # ── Pipeline Control ─────────────────────────────────────────────
     max_revisions: int = 2
@@ -332,9 +341,11 @@ class PrototypeConfig(BaseModel):
             ),
             "score_caps": ScoreCapConfig(
                 cap_pacing_on_monotony=self.cap_pacing_on_monotony,
+                severe_opener_threshold=self.severe_opener_threshold,
                 cap_prose_on_slop_count=self.cap_prose_on_slop_count,
                 cap_prose_on_slop_value=self.cap_prose_on_slop_value,
                 cap_prose_on_low_diversity=self.cap_prose_on_low_diversity,
+                cap_prose_on_persistent_slop=self.cap_prose_on_persistent_slop,
             ),
             "advisory_penalties": AdvisoryPenaltyConfig(
                 opener_monotony=self.penalty_opener_monotony,

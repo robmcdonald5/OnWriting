@@ -18,6 +18,7 @@ _DATA_DIR = Path(__file__).parent
 
 _phrases_cache: list[tuple[str, float]] | None = None
 _words_cache: list[tuple[str, float]] | None = None
+_custom_cache: list[tuple[str, float]] | None = None
 
 
 def _load_phrases() -> list[tuple[str, float]]:
@@ -58,6 +59,24 @@ def get_slop_phrases(min_severity: float = 0.0) -> list[tuple[str, float]]:
         _phrases_cache = _load_phrases()
     filtered = [(p, w) for p, w in _phrases_cache if w >= min_severity]
     return sorted(filtered, key=lambda x: x[1], reverse=True)
+
+
+def get_custom_phrases() -> list[tuple[str, float]]:
+    """Return project-specific banned phrases with penalty weights.
+
+    Unlike vendored data, these are hand-maintained and match
+    the banned constructions in SCENE_WRITER_GUIDELINES.
+    Same format conversion as vendored: penalty = 1.0 - prob.
+    """
+    global _custom_cache
+    if _custom_cache is None:
+        path = _DATA_DIR / "custom_phrases.json"
+        if path.exists():
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            _custom_cache = [(phrase, round(1.0 - prob, 4)) for phrase, prob in raw]
+        else:
+            _custom_cache = []
+    return _custom_cache
 
 
 def get_slop_words(min_severity: float = 0.0) -> list[tuple[str, float]]:
