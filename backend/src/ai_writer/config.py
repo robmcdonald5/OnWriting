@@ -19,9 +19,6 @@ class Settings(BaseSettings):
     default_model: str = "gemini-2.5-flash"
     default_temperature: float = 0.7
     planning_temperature: float = 0.3
-    creative_temperature: float = 1.3
-    frequency_penalty: float = 0.5
-    presence_penalty: float = 0.3
 
     # LangSmith tracing
     langchain_tracing_v2: bool = True
