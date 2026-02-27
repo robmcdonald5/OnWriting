@@ -92,6 +92,11 @@ class SceneWriterPromptConfig(BaseModel):
         "Output ONLY the scene prose. No headers, no meta-commentary."
     )
 
+    # Creative sampling (Scene Writer only — other agents use defaults)
+    creative_temperature: float = 1.3
+    frequency_penalty: float = 0.5
+    presence_penalty: float = 0.3
+
 
 class SlopConfig(BaseModel):
     """Scoring parameters for slop detection."""
@@ -313,6 +318,9 @@ class PrototypeConfig(BaseModel):
                 pacing=self.default_pacing,
                 prose_style=self.prose_style,
                 closing_motivation=self.scene_writer_motivation,
+                creative_temperature=self.creative_temperature,
+                frequency_penalty=self.frequency_penalty,
+                presence_penalty=self.presence_penalty,
             ),
             "style_editor": StyleEditorPromptConfig(
                 role_name=self.style_editor_role,
