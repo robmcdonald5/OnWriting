@@ -12,6 +12,7 @@ import logging
 from ai_writer.agents.base import get_structured_llm, invoke
 from ai_writer.prompts.builders import build_style_editor_prompt
 from ai_writer.prompts.configs import (
+    AdvisoryPenaltyConfig,
     ProseStructureConfig,
     ScoreCapConfig,
     SlopConfig,
@@ -369,8 +370,9 @@ def run_style_editor(state: dict) -> dict:
         dimension_reasoning=llm_output.dimension_reasoning,
     )
 
-    quality_score = rubric.compute_quality_score()
-    approved = rubric.compute_approved()
+    penalty_config = configs.get("advisory_penalties", AdvisoryPenaltyConfig())
+    quality_score = rubric.compute_quality_score(penalty_config)
+    approved = rubric.compute_approved(penalty_config)
 
     edit_feedback = EditFeedback(
         scene_id=latest_draft.scene_id,
