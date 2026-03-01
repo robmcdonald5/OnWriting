@@ -89,19 +89,26 @@ def run_scene_writer(state: dict) -> dict:
     story_brief = state["story_brief"]
     tone = story_brief.tone_profile
 
-    # Build config — start from state config, override with runtime tone values
+    # Build config — start from state config, conditionally override with tone
     configs = state.get("prompt_configs", {})
     base_config = configs.get("scene_writer", SceneWriterPromptConfig())
-    config = base_config.model_copy(
-        update={
-            "formality": tone.formality,
-            "darkness": tone.darkness,
-            "humor": tone.humor,
-            "pacing": tone.pacing,
-            "prose_style": tone.prose_style or base_config.prose_style,
-            "target_word_count": scene_outline.target_word_count,
-        }
-    )
+    tone_override = configs.get("tone_override", False)
+
+    if tone_override:
+        config = base_config.model_copy(
+            update={"target_word_count": scene_outline.target_word_count}
+        )
+    else:
+        config = base_config.model_copy(
+            update={
+                "formality": tone.formality,
+                "darkness": tone.darkness,
+                "humor": tone.humor,
+                "pacing": tone.pacing,
+                "prose_style": tone.prose_style or base_config.prose_style,
+                "target_word_count": scene_outline.target_word_count,
+            }
+        )
 
     system_prompt = build_scene_writer_prompt(config)
 
