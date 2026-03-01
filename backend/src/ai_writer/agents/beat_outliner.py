@@ -17,13 +17,13 @@ logger = logging.getLogger("ai_writer.agents.beat_outliner")
 def run_beat_outliner(state: dict) -> dict:
     """Execute the Beat Outliner: StoryBrief + CharacterRoster + WorldContext -> StoryOutline."""
     settings = get_settings()
-    temp = settings.planning_temperature
 
     story_brief = state["story_brief"]
     character_roster = state["character_roster"]
     world_context = state["world_context"]
 
     configs = state.get("prompt_configs", {})
+    temp = configs.get("planning_temperature", settings.planning_temperature)
     config = configs.get("beat_outliner", BeatOutlinerPromptConfig())
 
     logger.info("Building story outline...")

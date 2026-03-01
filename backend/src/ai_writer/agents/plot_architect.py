@@ -30,10 +30,10 @@ logger = logging.getLogger("ai_writer.agents.plot_architect")
 def run_plot_architect(state: dict) -> dict:
     """Execute the Plot Architect agent: user_prompt -> StoryBrief + CharacterRoster + WorldContext."""
     settings = get_settings()
-    temp = settings.planning_temperature
     user_prompt = state["user_prompt"]
 
     configs = state.get("prompt_configs", {})
+    temp = configs.get("planning_temperature", settings.planning_temperature)
     brief_config = configs.get("story_brief", StoryBriefPromptConfig())
     roster_config = configs.get("character_roster", CharacterRosterPromptConfig())
     world_config = configs.get("world_context", WorldContextPromptConfig())
