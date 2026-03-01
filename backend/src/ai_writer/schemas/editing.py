@@ -228,12 +228,14 @@ class SceneRubric(BaseModel):
         )
 
     def compute_approved(
-        self, penalty_config: AdvisoryPenaltyConfig | None = None
+        self,
+        penalty_config: AdvisoryPenaltyConfig | None = None,
+        approve_threshold: float = APPROVE_THRESHOLD,
     ) -> bool:
         """Composite approval: score >= threshold AND no critical failures
         AND deterministic checks pass.
         """
-        score_ok = self.compute_quality_score(penalty_config) >= APPROVE_THRESHOLD
+        score_ok = self.compute_quality_score(penalty_config) >= approve_threshold
         no_critical = not self.has_critical_failure()
         deterministic_ok = self.word_count_in_range and self.tense_consistent
         return score_ok and no_critical and deterministic_ok
