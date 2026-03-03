@@ -19,5 +19,7 @@
   ["he mused", 0.05],
   ["she mused", 0.05],
   ["he exclaimed", 0.05],
-  ["she exclaimed", 0.05]
+  ["she exclaimed", 0.05],
+  ["he interjected", 0.05],
+  ["she interjected", 0.05]
 ]
