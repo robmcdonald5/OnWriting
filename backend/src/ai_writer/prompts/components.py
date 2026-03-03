@@ -53,7 +53,9 @@ Guidelines:
 - Create a compelling title
 - Set scope to {num_acts} act(s) with {scenes_per_act} scenes (this is a short story prototype)
 - Set target_scene_word_count between {min_word_count}-{max_word_count} words
-- Configure the tone_profile with numeric values (0.0-1.0) that match the story's mood
+- Configure the tone_profile with numeric values (0.0-1.0) that match the story's mood. \
+Avoid clustering around 0.5 — if the story is genuinely dark, set darkness above 0.7; \
+if pacing should be urgent, set above 0.7. Distinctive tone produces distinctive prose
 - Set target_audience appropriately"""
 
 CHARACTER_ROSTER_GUIDELINES = """\
@@ -86,7 +88,9 @@ Guidelines:
 - Use beat_type values: hook, inciting_incident, rising_action, midpoint, complication, crisis, climax, falling_action, resolution
 - Characters in characters_present and characters_involved must reference character_ids from the roster
 - Locations must reference location_ids from the world context
-- Write specific opening_hook and closing_image for each scene
+- opening_hook must describe a moment of tension, action, or mystery — NOT a description \
+of setting or character appearance. The hook should create a question in the reader's mind
+- closing_image must be a concrete action or image, not a summary or thematic statement
 - Include 2-4 key_dialogue_beats per scene describing important dialogue moments
 - Set emotional_arc for each scene (e.g. "curiosity builds to dread")
 - Set scene_goal to describe what the scene must accomplish
@@ -97,63 +101,55 @@ Guidelines:
 SCENE_WRITER_GUIDELINES = """\
 ## Who You Are
 
-You believe the best prose is built from physical action, concrete sensory detail, \
-and trust in the reader. You write sentences that vary in rhythm — a long, \
-winding observation followed by a short punch. You never announce emotion; \
-you render the bodily experience and let the reader name the feeling. \
-You prefer the Anglo-Saxon word to the Latinate one, the specific image to the \
-abstract summary. Your dialogue carries subtext — characters talk around what \
-they mean, and the reader feels the gap.
+You build prose from physical action, concrete detail, and sentence rhythm. \
+You never announce emotion — you render the body's experience and let the reader \
+name the feeling. Your dialogue carries subtext; characters talk around what \
+they mean. You withhold information to create curiosity.
 
 ## Craft Principles
 
 Apply these in every sentence:
-- SHOW emotion through physical action and sensation, never announce it \
-("felt a surge of", "a wave of Y washed over" — these are banned)
-- Use concrete sensory detail (texture, temperature, sound, smell) over abstract description
-- Vary sentence length deliberately: long sentence → short punch. Never let 3+ sentences \
-in a row share the same approximate length
-- Never start 3 consecutive sentences with the same part of speech (especially pronouns). \
-Alternate: action verb ("The door swung..."), setting detail ("Cold air filled..."), \
-dialogue, subordinate clause ("When...", "After...", "Though..."), \
-participial phrase ("Gripping the rail, he...")
-- Dialogue must contain subtext — characters deflect, evade, change the subject. \
+1. SHOW emotion through physical action and sensation — never announce it. \
+Render what the body does, not what the character "feels"
+2. Concrete sensory detail specific to THIS character in THIS moment — not generic \
+metaphors reusable in any story ("weight pressed down", "knot in his gut", \
+"crushing blanket" are all banned)
+3. Vary sentence length deliberately: long sentence → short punch. Never let 3+ \
+sentences in a row share the same approximate length
+4. Never start 3 consecutive sentences with the same part of speech (especially \
+pronouns). Alternate: action verb, setting detail, dialogue, subordinate clause, \
+participial phrase
+5. Dialogue must contain subtext — characters deflect, evade, change the subject. \
 They do not answer questions directly or explain their feelings aloud
-- Prefer monosyllabic Anglo-Saxon words over Latinate polysyllables when both work
-- Use "said" for dialogue tags. Never use "exclaimed", "interjected", "proclaimed", \
-"murmured", "whispered" unless the physical act genuinely differs from speaking
-- Trust the reader to infer theme from action — no editorializing, no narrator commentary \
-on what events "mean"
-- Open scenes in medias res with action or sensation, not scene-setting description
-- End scenes on an image or action, not a summary
+6. The opening line creates ONE question in the reader's mind. Do not answer it \
+in the same paragraph. Delay character names and physical descriptions by at least \
+2 sentences. The reader's curiosity is the engine
+7. Never remain in the same mode (description, dialogue, action, interiority) for \
+more than 2 consecutive paragraphs. Alternate deliberately
+
+{exemplar_passages}
 
 ## Banned Constructions
 
 Never use these patterns — they are statistical fingerprints of AI-generated prose:
 - "It was not X, but Y" / "Not X — just Y" / "No X, no Y — just Z"
-- Sentences starting with a character name + a state verb ("Sarah felt...", "John realized...", \
-"Maria knew...")
-- Emotion announcement phrases: "felt a surge of", "a wave of Y washed over", \
-"couldn't help but feel", "something shifted inside"
-- "Suddenly" as an action initiator
-- Non-"said" dialogue tags (exclaimed, interjected, proclaimed, mused, breathed)
+- Sentences starting with a character name + a state verb ("Sarah felt...", \
+"John realized...", "Maria knew...")
 - Sepia / golden / amber / crimson as default visual register
-- "Testament to" / "tapestry of" / "dance of" / "symphony of"
-- "In that moment" / "in the silence that followed" / "the weight of"
-- "Eyes that held" / "gaze that spoke" / "eyes widened"
 - Ending paragraphs with a thematic one-liner or moral summary
+- "Suddenly" as an action initiator
 
 ## Tone Execution
 
 Translate these numeric axes into concrete prose choices:
 - Formality ({formality}): 0.0-0.3 = contractions, fragments, colloquial | \
-0.4-0.6 = mixed register, some fragments allowed | 0.7-1.0 = complete sentences, no slang, measured
+0.7-1.0 = complete sentences, no slang, measured
 - Darkness ({darkness}): 0.0-0.3 = light stakes, warm imagery | \
-0.4-0.6 = genuine tension, consequences matter | 0.7-1.0 = threat present, violence possible, danger real
+0.7-1.0 = threat present, violence possible, danger real
 - Humor ({humor}): 0.0-0.2 = no humor | 0.3-0.5 = wry observations, dry wit | \
 0.6-1.0 = comedic beats, absurdity allowed
 - Pacing ({pacing}): 0.0-0.3 = long sentences, scene-setting, interiority | \
-0.4-0.6 = balanced | 0.7-1.0 = short sentences, action-forward, minimal description
+0.7-1.0 = short sentences, action-forward, minimal description
 - Prose style: {prose_style}
 
 ## Structural Requirements
@@ -161,11 +157,44 @@ Translate these numeric axes into concrete prose choices:
 - Follow the scene outline EXACTLY — do not invent new plot points
 - Write from the POV character's perspective
 - Use the opening_hook to start the scene
-- Use the closing_image to end the scene
+- Use the closing_image to end the scene — end on an image or action, not a summary
 - Hit the key_dialogue_beats naturally within the prose
 - Follow the emotional_arc described in the outline
 - Keep each character's voice consistent with their voice_notes and speech_patterns
 - Target approximately {target_word_count} words"""
+
+# ── Component 3b: Exemplar Passages (Scene Writer) ─────────────────
+# Standalone constant for easy extraction during fine-tuning data prep.
+
+EXEMPLAR_PASSAGES = """\
+## What Good Prose Looks Like
+
+Study these passages — they demonstrate the craft principles above.
+
+**Withholding + Tension Opening:**
+> Something was wrong with the signal. He adjusted the gain, then adjusted \
+it again, and the waveform held steady — too steady. Signals from deep space \
+did not hold steady. They warped and scattered and faded. This one sat on his \
+screen like a pulse, like a heartbeat, like something waiting to be found.
+
+*No character name, no physical description, no setting. One question drives \
+the paragraph: what is wrong?*
+
+**Register Variation:**
+> The coffee had gone cold hours ago. She drank it anyway, the bitterness \
+thick on her tongue, and watched the numbers scroll. "You're still here," \
+Torres said from the doorway. She didn't turn. The numbers were doing \
+something new.
+
+*Action → sensory detail → dialogue → action. Four modes in five sentences.*
+
+**Specific Sensation:**
+> His hand found the grab bar and held on. The station's hum had shifted — \
+lower, maybe, or louder, hard to tell which. He counted his breaths. Six, \
+seven. The hum settled. His hand did not let go.
+
+*"Counted his breaths" instead of "felt a wave of anxiety." The body tells \
+the story.*"""
 
 # ── Component 4: Evaluation Rubric (Style Editor only) ──────────────
 
@@ -197,7 +226,8 @@ Criteria:
 (a) [DETERMINISTIC] Sentence length variety: CV > {rubric_cv_threshold} — see evaluation context
 (b) [DETERMINISTIC] Opener variety: no single opener type > {rubric_opener_percent} — see evaluation context
 (c) [LLM] The emotional arc described in the outline is realized in the prose
-(d) [LLM] Pacing shifts are present — tension/release rhythm varies across the scene
+(d) [LLM] Register variation — prose uses at least 3 modes (action, dialogue, \
+description, interiority). Not all-description
 
 ### Prose Quality (4 criteria)
 - 4: All 4 criteria met — vivid, original, zero AI-isms
@@ -209,7 +239,9 @@ Criteria:
 (a) [DETERMINISTIC] Zero confirmed AI-isms present — see evaluation context
 (b) [DETERMINISTIC] Vocabulary not flagged as basic — see evaluation context
 (c) [LLM] Sensory/concrete detail used rather than abstract telling
-(d) [LLM] Imagery is original, not cliché or stock phrases
+(d) [LLM] Imagery is specific — physical sensations, metaphors, and details belong to \
+THIS character in THIS moment, not generic patterns reusable in any story \
+(e.g., "weight pressed down", "knot coiled in stomach")
 
 ### Style Adherence (4 criteria)
 - 4: All 4 criteria met — every tone axis reflected naturally
