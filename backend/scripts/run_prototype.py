@@ -30,11 +30,13 @@ STORY_CONFIG = PrototypeConfig(
     min_word_count=800,
     max_word_count=1200,
     # ── Tone Defaults (overridden at runtime by StoryBrief.tone_profile) ──
+    # Set tone_override=True to use these values instead of tone_profile
     default_formality=0.5,
     default_darkness=0.5,
     default_humor=0.3,
     default_pacing=0.5,
     prose_style="natural and engaging",
+    tone_override=False,
     # ── Editor Calibration ──
     normalization_guidance=(
         "Score STRICTLY. A score of 3 means 'competent but with clear "
@@ -42,6 +44,10 @@ STORY_CONFIG = PrototypeConfig(
         "Score 4 ONLY when the criterion is met with zero weaknesses. "
         "Most first drafts should score 2-3 on most dimensions."
     ),
+    approve_threshold=0.7,
+    # ── Temperature Control ──
+    planning_temperature=0.3,
+    eval_temperature=0.1,
     # ── Pipeline Control ──
     max_revisions=2,
     min_revisions=1,

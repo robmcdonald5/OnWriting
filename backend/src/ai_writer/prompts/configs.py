@@ -92,6 +92,11 @@ class SceneWriterPromptConfig(BaseModel):
         "Output ONLY the scene prose. No headers, no meta-commentary."
     )
 
+    # Creative sampling (Scene Writer only — other agents use defaults)
+    creative_temperature: float = 1.3
+    frequency_penalty: float = 0.5
+    presence_penalty: float = 0.3
+
 
 class SlopConfig(BaseModel):
     """Scoring parameters for slop detection."""
@@ -168,6 +173,8 @@ class StyleEditorPromptConfig(BaseModel):
         "Score 4 ONLY when the criterion is met with zero weaknesses. "
         "Most first drafts should score 2-3 on most dimensions."
     )
+    rubric_cv_threshold: str = "0.3"
+    rubric_opener_percent: str = "30%"
 
 
 # ── Script-Level Configuration ──────────────────────────────────────────────
@@ -198,6 +205,7 @@ class PrototypeConfig(BaseModel):
     default_humor: float = 0.3
     default_pacing: float = 0.5
     prose_style: str = "natural and engaging"
+    tone_override: bool = False
 
     # ── Editor Calibration ───────────────────────────────────────────
     normalization_guidance: str = (
@@ -206,6 +214,7 @@ class PrototypeConfig(BaseModel):
         "Score 4 ONLY when the criterion is met with zero weaknesses. "
         "Most first drafts should score 2-3 on most dimensions."
     )
+    approve_threshold: float = 0.7
 
     # ── Score Caps (deterministic overrides after LLM scoring) ──────
     cap_pacing_on_monotony: int = 2
@@ -241,6 +250,10 @@ class PrototypeConfig(BaseModel):
     slop_word_excess_weight: float = 0.3
     slop_word_min_severity: float = 0.5
     slop_word_free_occurrences: int = 1
+
+    # ── Temperature Control ─────────────────────────────────────────
+    planning_temperature: float = 0.3
+    eval_temperature: float = 0.1
 
     # ── Creative Sampling (Scene Writer only) ────────────────────────
     creative_temperature: float = 1.3
@@ -313,6 +326,9 @@ class PrototypeConfig(BaseModel):
                 pacing=self.default_pacing,
                 prose_style=self.prose_style,
                 closing_motivation=self.scene_writer_motivation,
+                creative_temperature=self.creative_temperature,
+                frequency_penalty=self.frequency_penalty,
+                presence_penalty=self.presence_penalty,
             ),
             "style_editor": StyleEditorPromptConfig(
                 role_name=self.style_editor_role,
@@ -321,6 +337,8 @@ class PrototypeConfig(BaseModel):
                 humor=self.default_humor,
                 pacing=self.default_pacing,
                 normalization_guidance=self.normalization_guidance,
+                rubric_cv_threshold=str(self.length_cv_threshold),
+                rubric_opener_percent=f"{self.opener_monotony_threshold:.0%}",
             ),
             "prose_structure": ProseStructureConfig(
                 opener_monotony_threshold=self.opener_monotony_threshold,
@@ -347,6 +365,10 @@ class PrototypeConfig(BaseModel):
                 cap_prose_on_low_diversity=self.cap_prose_on_low_diversity,
                 cap_prose_on_persistent_slop=self.cap_prose_on_persistent_slop,
             ),
+            "tone_override": self.tone_override,
+            "planning_temperature": self.planning_temperature,
+            "eval_temperature": self.eval_temperature,
+            "approve_threshold": self.approve_threshold,
             "advisory_penalties": AdvisoryPenaltyConfig(
                 opener_monotony=self.penalty_opener_monotony,
                 length_monotony=self.penalty_length_monotony,

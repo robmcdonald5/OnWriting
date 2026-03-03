@@ -122,6 +122,8 @@ def build_style_editor_prompt(config: StyleEditorPromptConfig) -> str:
             humor=config.humor,
             pacing=config.pacing,
             normalization_guidance=config.normalization_guidance,
+            rubric_cv_threshold=config.rubric_cv_threshold,
+            rubric_opener_percent=config.rubric_opener_percent,
         ),
     ]
     return "\n".join(parts)

@@ -9,8 +9,7 @@ Component Inventory (see plan for full matrix):
     2. TASK_STATEMENTS — agent objective (all 6 prompts)
     3. *_GUIDELINES — behavioral rules (5 of 6, not Style Editor)
     4. EVALUATION_RUBRIC — rubric spec (Style Editor only)
-    5. CLOSING_MOTIVATIONS — final encouragement (5 of 6)
-    6. REVISION_ADDENDUM — conditional scene writer addendum
+    5. REVISION_ADDENDUM — conditional scene writer addendum
 """
 
 # ── Component 1: Role Identity ──────────────────────────────────────
@@ -195,8 +194,8 @@ Each dimension has 4 binary criteria. The dimension score = number of criteria m
 - 1: 0-1 criteria met — flat, monotonous pacing
 
 Criteria:
-(a) [DETERMINISTIC] Sentence length variety: CV > 0.4 — see evaluation context
-(b) [DETERMINISTIC] Opener variety: no single opener type > 35% — see evaluation context
+(a) [DETERMINISTIC] Sentence length variety: CV > {rubric_cv_threshold} — see evaluation context
+(b) [DETERMINISTIC] Opener variety: no single opener type > {rubric_opener_percent} — see evaluation context
 (c) [LLM] The emotional arc described in the outline is realized in the prose
 (d) [LLM] Pacing shifts are present — tension/release rhythm varies across the scene
 
@@ -278,25 +277,6 @@ the scene context.
    and suggest a concrete replacement. Use format:
    REPLACE: "original phrase" -> suggested alternative
    VARY: [description of structural pattern to break]"""
-
-# ── Component 5: Closing Motivations ────────────────────────────────
-# Present in 5 of 6 prompts (all except Style Editor).
-
-CLOSING_MOTIVATIONS = {
-    "story_brief": (
-        "Be specific and creative. The brief drives all downstream writing."
-    ),
-    "character_roster": "Make characters feel real and distinct from each other.",
-    "world_context": "The world should feel consistent and lived-in.",
-    "beat_outliner": (
-        "Be extremely specific. Scene Writers should make ZERO plot decisions "
-        "— everything\nshould be predetermined in this outline."
-    ),
-    "scene_writer": (
-        "Output ONLY the scene prose after the planning delimiter. "
-        "No headers, no meta-commentary."
-    ),
-}
 
 # ── Conditional: Revision Addendum (Scene Writer only) ──────────────
 # Appended to the scene writer system prompt when revision_count > 0.

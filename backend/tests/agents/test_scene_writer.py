@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 from ai_writer.agents.scene_writer import _extract_prose, run_scene_writer
+from ai_writer.prompts.configs import SceneWriterPromptConfig
 from ai_writer.schemas.characters import (
     CharacterProfile,
     CharacterRole,
@@ -61,13 +62,7 @@ def _build_state(revision_count=0, existing_drafts=None, edit_feedback=None):
 
 class TestSceneWriter:
     @patch("ai_writer.agents.scene_writer.get_llm")
-    @patch("ai_writer.agents.scene_writer.get_settings")
-    def test_produces_scene_draft(self, mock_settings, mock_get_llm):
-        mock_settings.return_value = MagicMock(
-            creative_temperature=1.3,
-            frequency_penalty=0.5,
-            presence_penalty=0.3,
-        )
+    def test_produces_scene_draft(self, mock_get_llm):
 
         mock_response = MagicMock()
         mock_response.content = (
@@ -90,13 +85,7 @@ class TestSceneWriter:
         assert result["scene_drafts"][0].word_count > 0
 
     @patch("ai_writer.agents.scene_writer.get_llm")
-    @patch("ai_writer.agents.scene_writer.get_settings")
-    def test_revision_replaces_last_draft(self, mock_settings, mock_get_llm):
-        mock_settings.return_value = MagicMock(
-            creative_temperature=1.3,
-            frequency_penalty=0.5,
-            presence_penalty=0.3,
-        )
+    def test_revision_replaces_last_draft(self, mock_get_llm):
 
         mock_response = MagicMock()
         mock_response.content = "Revised scene prose."
@@ -136,14 +125,8 @@ class TestSceneWriter:
         assert result["scene_drafts"][0].prose == "Revised scene prose."
 
     @patch("ai_writer.agents.scene_writer.get_llm")
-    @patch("ai_writer.agents.scene_writer.get_settings")
-    def test_revision_includes_dimension_breakdown(self, mock_settings, mock_get_llm):
+    def test_revision_includes_dimension_breakdown(self, mock_get_llm):
         """Verify the revision addendum includes per-dimension scores."""
-        mock_settings.return_value = MagicMock(
-            creative_temperature=1.3,
-            frequency_penalty=0.5,
-            presence_penalty=0.3,
-        )
 
         mock_response = MagicMock()
         mock_response.content = "Revised prose with better voice."
@@ -192,14 +175,8 @@ class TestSceneWriter:
         assert "CRITICAL" in system_msg
 
     @patch("ai_writer.agents.scene_writer.get_llm")
-    @patch("ai_writer.agents.scene_writer.get_settings")
-    def test_revision_includes_confirmed_slop(self, mock_settings, mock_get_llm):
+    def test_revision_includes_confirmed_slop(self, mock_get_llm):
         """Verify confirmed slop phrases are forwarded in revision prompt."""
-        mock_settings.return_value = MagicMock(
-            creative_temperature=1.3,
-            frequency_penalty=0.5,
-            presence_penalty=0.3,
-        )
 
         mock_response = MagicMock()
         mock_response.content = "Revised prose."
@@ -247,14 +224,8 @@ class TestSceneWriter:
         assert "REPLACE" in system_msg
 
     @patch("ai_writer.agents.scene_writer.get_llm")
-    @patch("ai_writer.agents.scene_writer.get_settings")
-    def test_revision_includes_structural_issues(self, mock_settings, mock_get_llm):
+    def test_revision_includes_structural_issues(self, mock_get_llm):
         """Verify structural issues are forwarded in revision prompt."""
-        mock_settings.return_value = MagicMock(
-            creative_temperature=1.3,
-            frequency_penalty=0.5,
-            presence_penalty=0.3,
-        )
 
         mock_response = MagicMock()
         mock_response.content = "Revised prose with varied structure."
@@ -304,14 +275,8 @@ class TestSceneWriter:
         assert "diversity" in system_msg.lower() or "vocabulary" in system_msg.lower()
 
     @patch("ai_writer.agents.scene_writer.get_llm")
-    @patch("ai_writer.agents.scene_writer.get_settings")
-    def test_revision_prescriptive_opener_feedback(self, mock_settings, mock_get_llm):
+    def test_revision_prescriptive_opener_feedback(self, mock_get_llm):
         """Verify opener monotony feedback is prescriptive with stats and alternatives."""
-        mock_settings.return_value = MagicMock(
-            creative_temperature=1.3,
-            frequency_penalty=0.5,
-            presence_penalty=0.3,
-        )
 
         mock_response = MagicMock()
         mock_response.content = "Revised prose with varied openers."
@@ -368,14 +333,8 @@ class TestSceneWriter:
         )
 
     @patch("ai_writer.agents.scene_writer.get_llm")
-    @patch("ai_writer.agents.scene_writer.get_settings")
-    def test_polish_addendum_used_when_approved(self, mock_settings, mock_get_llm):
+    def test_polish_addendum_used_when_approved(self, mock_get_llm):
         """When draft was approved but forced-revised, use POLISH PASS not REVISION."""
-        mock_settings.return_value = MagicMock(
-            creative_temperature=1.3,
-            frequency_penalty=0.5,
-            presence_penalty=0.3,
-        )
 
         mock_response = MagicMock()
         mock_response.content = "Polished prose."
@@ -422,16 +381,8 @@ class TestSceneWriter:
         assert "REVISION INSTRUCTIONS" not in system_msg
 
     @patch("ai_writer.agents.scene_writer.get_llm")
-    @patch("ai_writer.agents.scene_writer.get_settings")
-    def test_revision_addendum_used_when_not_approved(
-        self, mock_settings, mock_get_llm
-    ):
+    def test_revision_addendum_used_when_not_approved(self, mock_get_llm):
         """When draft failed QA, use REVISION INSTRUCTIONS not POLISH PASS."""
-        mock_settings.return_value = MagicMock(
-            creative_temperature=1.3,
-            frequency_penalty=0.5,
-            presence_penalty=0.3,
-        )
 
         mock_response = MagicMock()
         mock_response.content = "Revised prose."
@@ -477,14 +428,8 @@ class TestSceneWriter:
         assert "POLISH PASS" not in system_msg
 
     @patch("ai_writer.agents.scene_writer.get_llm")
-    @patch("ai_writer.agents.scene_writer.get_settings")
-    def test_first_draft_includes_planning_preamble(self, mock_settings, mock_get_llm):
+    def test_first_draft_includes_planning_preamble(self, mock_get_llm):
         """First draft (revision_count=0) should include planning questions."""
-        mock_settings.return_value = MagicMock(
-            creative_temperature=1.3,
-            frequency_penalty=0.5,
-            presence_penalty=0.3,
-        )
 
         mock_response = MagicMock()
         mock_response.content = (
@@ -504,14 +449,8 @@ class TestSceneWriter:
         assert "---PROSE---" in user_msg
 
     @patch("ai_writer.agents.scene_writer.get_llm")
-    @patch("ai_writer.agents.scene_writer.get_settings")
-    def test_revision_skips_planning_preamble(self, mock_settings, mock_get_llm):
+    def test_revision_skips_planning_preamble(self, mock_get_llm):
         """Revisions (revision_count > 0) should NOT include planning questions."""
-        mock_settings.return_value = MagicMock(
-            creative_temperature=1.3,
-            frequency_penalty=0.5,
-            presence_penalty=0.3,
-        )
 
         mock_response = MagicMock()
         mock_response.content = "Revised prose."
@@ -556,14 +495,8 @@ class TestSceneWriter:
         assert "dominant physical sensation" not in user_msg
 
     @patch("ai_writer.agents.scene_writer.get_llm")
-    @patch("ai_writer.agents.scene_writer.get_settings")
-    def test_first_draft_strips_planning_from_prose(self, mock_settings, mock_get_llm):
+    def test_first_draft_strips_planning_from_prose(self, mock_get_llm):
         """First draft should strip planning answers, keeping only prose."""
-        mock_settings.return_value = MagicMock(
-            creative_temperature=1.3,
-            frequency_penalty=0.5,
-            presence_penalty=0.3,
-        )
 
         mock_response = MagicMock()
         mock_response.content = (
@@ -586,28 +519,28 @@ class TestSceneWriter:
         assert "---PROSE---" not in prose
 
     @patch("ai_writer.agents.scene_writer.get_llm")
-    @patch("ai_writer.agents.scene_writer.get_settings")
-    def test_creative_temperature_and_penalties_used(self, mock_settings, mock_get_llm):
-        """Scene Writer should use creative_temperature and sampling penalties."""
-        mock_settings.return_value = MagicMock(
-            creative_temperature=1.3,
-            frequency_penalty=0.5,
-            presence_penalty=0.3,
-        )
-
+    def test_creative_temperature_and_penalties_from_config(self, mock_get_llm):
+        """Scene Writer should read creative sampling params from prompt config."""
         mock_response = MagicMock()
         mock_response.content = "---PROSE---\nSome prose."
         mock_llm = MagicMock()
         mock_llm.invoke.return_value = mock_response
         mock_get_llm.return_value = mock_llm
 
+        # Pass custom config to verify values flow through
+        custom_config = SceneWriterPromptConfig(
+            creative_temperature=0.9,
+            frequency_penalty=0.2,
+            presence_penalty=0.1,
+        )
         state = _build_state()
+        state["prompt_configs"] = {"scene_writer": custom_config}
         run_scene_writer(state)
 
         mock_get_llm.assert_called_once_with(
-            temperature=1.3,
-            frequency_penalty=0.5,
-            presence_penalty=0.3,
+            temperature=0.9,
+            frequency_penalty=0.2,
+            presence_penalty=0.1,
         )
 
 
@@ -637,14 +570,8 @@ class TestPersistentSlopEscalation:
     """Tests for escalated MANDATORY REPLACE language on persistent slop."""
 
     @patch("ai_writer.agents.scene_writer.get_llm")
-    @patch("ai_writer.agents.scene_writer.get_settings")
-    def test_persistent_slop_gets_mandatory_replace(self, mock_settings, mock_get_llm):
+    def test_persistent_slop_gets_mandatory_replace(self, mock_get_llm):
         """Persistent phrases should use MANDATORY REPLACE in revision prompt."""
-        mock_settings.return_value = MagicMock(
-            creative_temperature=1.3,
-            frequency_penalty=0.5,
-            presence_penalty=0.3,
-        )
 
         mock_response = MagicMock()
         mock_response.content = "Revised prose."
@@ -698,14 +625,8 @@ class TestPersistentSlopEscalation:
         assert 'MANDATORY REPLACE: "tapestry of"' not in system_msg
 
     @patch("ai_writer.agents.scene_writer.get_llm")
-    @patch("ai_writer.agents.scene_writer.get_settings")
-    def test_no_persistent_slop_uses_regular_replace(self, mock_settings, mock_get_llm):
+    def test_no_persistent_slop_uses_regular_replace(self, mock_get_llm):
         """When no persistent slop, all phrases should use regular REPLACE."""
-        mock_settings.return_value = MagicMock(
-            creative_temperature=1.3,
-            frequency_penalty=0.5,
-            presence_penalty=0.3,
-        )
 
         mock_response = MagicMock()
         mock_response.content = "Revised prose."

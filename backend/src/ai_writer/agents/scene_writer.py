@@ -8,7 +8,6 @@ import logging
 import re
 
 from ai_writer.agents.base import get_llm, invoke
-from ai_writer.config import get_settings
 from ai_writer.prompts.builders import build_scene_writer_prompt
 from ai_writer.prompts.components import POLISH_ADDENDUM, REVISION_ADDENDUM
 from ai_writer.prompts.configs import SceneWriterPromptConfig
@@ -86,26 +85,30 @@ def _get_scene_and_characters(state: dict):
 
 def run_scene_writer(state: dict) -> dict:
     """Execute the Scene Writer: scene outline + context → SceneDraft."""
-    settings = get_settings()
-    temp = settings.creative_temperature
-
     scene_outline, characters = _get_scene_and_characters(state)
     story_brief = state["story_brief"]
     tone = story_brief.tone_profile
 
-    # Build config — start from state config, override with runtime tone values
+    # Build config — start from state config, conditionally override with tone
     configs = state.get("prompt_configs", {})
     base_config = configs.get("scene_writer", SceneWriterPromptConfig())
-    config = base_config.model_copy(
-        update={
-            "formality": tone.formality,
-            "darkness": tone.darkness,
-            "humor": tone.humor,
-            "pacing": tone.pacing,
-            "prose_style": tone.prose_style or base_config.prose_style,
-            "target_word_count": scene_outline.target_word_count,
-        }
-    )
+    tone_override = configs.get("tone_override", False)
+
+    if tone_override:
+        config = base_config.model_copy(
+            update={"target_word_count": scene_outline.target_word_count}
+        )
+    else:
+        config = base_config.model_copy(
+            update={
+                "formality": tone.formality,
+                "darkness": tone.darkness,
+                "humor": tone.humor,
+                "pacing": tone.pacing,
+                "prose_style": tone.prose_style or base_config.prose_style,
+                "target_word_count": scene_outline.target_word_count,
+            }
+        )
 
     system_prompt = build_scene_writer_prompt(config)
 
@@ -246,9 +249,9 @@ def run_scene_writer(state: dict) -> dict:
     logger.info("Writing scene %d%s...", scene_outline.scene_number, revision_label)
 
     llm = get_llm(
-        temperature=temp,
-        frequency_penalty=settings.frequency_penalty,
-        presence_penalty=settings.presence_penalty,
+        temperature=config.creative_temperature,
+        frequency_penalty=config.frequency_penalty,
+        presence_penalty=config.presence_penalty,
     )
 
     # Prepend planning questions to the user message for first drafts

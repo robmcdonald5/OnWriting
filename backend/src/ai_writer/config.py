@@ -17,11 +17,10 @@ class Settings(BaseSettings):
     # Google Gemini
     google_api_key: str = ""
     default_model: str = "gemini-2.5-flash"
+    # Safety fallback in get_llm(); all agents pass explicit temperatures
     default_temperature: float = 0.7
+    # Env-level fallback; prefer PrototypeConfig per-experiment override
     planning_temperature: float = 0.3
-    creative_temperature: float = 1.3
-    frequency_penalty: float = 0.5
-    presence_penalty: float = 0.3
 
     # LangSmith tracing
     langchain_tracing_v2: bool = True
