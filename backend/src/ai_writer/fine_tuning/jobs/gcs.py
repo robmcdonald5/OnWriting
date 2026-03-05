@@ -41,8 +41,8 @@ class GCSUploader:
         if not path.exists():
             raise FileNotFoundError(f"File not found: {path}")
 
-        bucket = self.bucket_name or "mock-bucket"
-        gcs_uri = f"gs://{bucket}/{gcs_prefix}/{path.name}"
+        bucket_name = self.bucket_name or "mock-bucket"
+        gcs_uri = f"gs://{bucket_name}/{gcs_prefix}/{path.name}"
 
         if self.mock_mode:
             logger.info("[MOCK] Would upload %s → %s", path, gcs_uri)
@@ -52,7 +52,7 @@ class GCSUploader:
             raise ValueError("vertex_bucket_name must be set when mock_mode=False")
 
         try:
-            from google.cloud import storage
+            from google.cloud import storage  # type: ignore[import-untyped]
         except ImportError as exc:
             raise ImportError(
                 "google-cloud-storage is required for real GCS uploads. "
@@ -60,9 +60,9 @@ class GCSUploader:
             ) from exc
 
         client = storage.Client(project=self.project_id)
-        bucket = client.bucket(self.bucket_name)
+        gcs_bucket = client.bucket(self.bucket_name)
         blob_name = f"{gcs_prefix}/{path.name}"
-        blob = bucket.blob(blob_name)
+        blob = gcs_bucket.blob(blob_name)
 
         logger.info("Uploading %s → %s", path, gcs_uri)
         blob.upload_from_filename(str(path))
@@ -86,7 +86,7 @@ class GCSUploader:
             ]
 
         try:
-            from google.cloud import storage
+            from google.cloud import storage  # type: ignore[import-untyped]
         except ImportError as exc:
             raise ImportError(
                 "google-cloud-storage is required. "
@@ -94,6 +94,6 @@ class GCSUploader:
             ) from exc
 
         client = storage.Client(project=self.project_id)
-        bucket = client.bucket(self.bucket_name)
-        blobs = bucket.list_blobs(prefix=prefix)
+        gcs_bucket = client.bucket(self.bucket_name)
+        blobs = gcs_bucket.list_blobs(prefix=prefix)
         return [f"gs://{self.bucket_name}/{blob.name}" for blob in blobs]
