@@ -80,7 +80,7 @@ class FineTuningLauncher:
             raise ValueError("vertex_project_id must be set")
 
         try:
-            from google.cloud import aiplatform
+            from google.cloud import aiplatform  # type: ignore[import-untyped]
         except ImportError as exc:
             raise ImportError(
                 "google-cloud-aiplatform is required for real tuning jobs. "

@@ -111,7 +111,7 @@ class JobMonitor:
     def _real_status(self, job_name: str) -> JobStatus:
         """Check real job status via Vertex AI API."""
         try:
-            from google.cloud import aiplatform
+            from google.cloud import aiplatform  # type: ignore[import-untyped]
         except ImportError as exc:
             raise ImportError(
                 "google-cloud-aiplatform is required. "
@@ -134,7 +134,7 @@ class JobMonitor:
     def _real_list_models(self) -> list[TunedModelInfo]:
         """List real tuned models via Vertex AI API."""
         try:
-            from google.cloud import aiplatform
+            from google.cloud import aiplatform  # type: ignore[import-untyped]
         except ImportError as exc:
             raise ImportError(
                 "google-cloud-aiplatform is required. "

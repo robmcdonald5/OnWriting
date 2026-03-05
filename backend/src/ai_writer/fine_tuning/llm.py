@@ -87,7 +87,7 @@ def get_vertex_llm(
         raise ValueError("vertex_tuned_model_endpoint must be set when mock_mode=False")
 
     try:
-        from langchain_google_vertexai import ChatVertexAI
+        from langchain_google_vertexai import ChatVertexAI  # type: ignore[import-not-found]
     except ImportError as exc:
         raise ImportError(
             "langchain-google-vertexai is required for real Vertex AI inference. "
