@@ -52,6 +52,24 @@ class JudgeVerdict(BaseModel):
     preferred: Literal["A", "B", "tie"] = Field(description="'A', 'B', or 'tie'")
     reasoning: str = ""
     a_is_base: bool = Field(description="True if A=base model, False if A=tuned model")
+    is_bidirectional: bool = Field(default=False)
+    position_agreed: bool = Field(
+        default=True,
+        description="Both orderings agreed (only meaningful when bidirectional)",
+    )
+
+
+class MultiJudgeVerdict(BaseModel):
+    """Aggregated verdict from multiple judge models."""
+
+    verdicts: list[JudgeVerdict]
+    judge_models: list[str]
+    consensus_preferred: Literal["A", "B", "tie"]
+    agreement_ratio: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Fraction of judges agreeing on the consensus winner",
+    )
 
 
 class PromptComparisonResult(BaseModel):
@@ -66,6 +84,7 @@ class PromptComparisonResult(BaseModel):
     base_analysis: TextAnalysisSnapshot
     tuned_analysis: TextAnalysisSnapshot
     judge_verdict: JudgeVerdict | None = None
+    multi_judge_verdict: MultiJudgeVerdict | None = None
 
 
 class ComparisonReport(BaseModel):

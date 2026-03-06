@@ -5,11 +5,14 @@ This is the main orchestrator for the comparison testbed. For each prompt:
 2. Sends to tuned model (via Vertex AI or mock)
 3. Runs deterministic text analysis on both outputs
 4. Optionally invokes LLM-as-judge for pairwise evaluation
+   (supports bidirectional and multi-judge modes)
 """
 
 import logging
 import time
+from collections import Counter
 from datetime import datetime, timezone
+from typing import Literal
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -19,7 +22,9 @@ from ai_writer.fine_tuning.comparison.judge import PairwiseJudge
 from ai_writer.fine_tuning.comparison.prompts import TestPrompt, get_prompts
 from ai_writer.fine_tuning.comparison.schemas import (
     ComparisonReport,
+    JudgeVerdict,
     ModelOutput,
+    MultiJudgeVerdict,
     PromptComparisonResult,
     TextAnalysisSnapshot,
 )
@@ -55,10 +60,10 @@ class ComparisonRunner:
         )
 
         results = []
-        judge = PairwiseJudge(model=self.config.judge_model) if with_judge else None
+        judges = self._create_judges() if with_judge else []
 
         for prompt in prompts:
-            result = self._compare_single(prompt, judge)
+            result = self._compare_single(prompt, judges)
             results.append(result)
 
         report = self._build_report(results)
@@ -70,10 +75,17 @@ class ComparisonRunner:
         )
         return report
 
+    def _create_judges(self) -> list[PairwiseJudge]:
+        """Create judge instances for primary + additional models."""
+        judges = [PairwiseJudge(model=self.config.judge_model)]
+        for model in self.config.judge_models:
+            judges.append(PairwiseJudge(model=model))
+        return judges
+
     def _compare_single(
         self,
         prompt: TestPrompt,
-        judge: PairwiseJudge | None,
+        judges: list[PairwiseJudge],
     ) -> PromptComparisonResult:
         """Compare a single prompt across both models."""
         logger.info("Comparing prompt: %s (%s)", prompt.id, prompt.category)
@@ -85,13 +97,25 @@ class ComparisonRunner:
         tuned_analysis = self._analyze(tuned_output.text)
 
         verdict = None
-        if judge:
-            verdict = judge.evaluate(
-                prompt_id=prompt.id,
-                prompt_text=prompt.user_prompt,
-                base_text=base_output.text,
-                tuned_text=tuned_output.text,
+        multi_verdict = None
+
+        if judges:
+            verdicts = self._run_judges(
+                judges,
+                prompt.id,
+                prompt.user_prompt,
+                base_output.text,
+                tuned_output.text,
             )
+
+            if len(verdicts) == 1:
+                verdict = verdicts[0]
+            else:
+                judge_models = [self.config.judge_model] + list(
+                    self.config.judge_models
+                )
+                multi_verdict = self._aggregate_verdicts(verdicts, judge_models)
+                verdict = verdicts[0]
 
         return PromptComparisonResult(
             prompt_id=prompt.id,
@@ -103,6 +127,68 @@ class ComparisonRunner:
             base_analysis=base_analysis,
             tuned_analysis=tuned_analysis,
             judge_verdict=verdict,
+            multi_judge_verdict=multi_verdict,
+        )
+
+    def _run_judges(
+        self,
+        judges: list[PairwiseJudge],
+        prompt_id: str,
+        prompt_text: str,
+        base_text: str,
+        tuned_text: str,
+    ) -> list[JudgeVerdict]:
+        """Run all judges, using bidirectional if configured."""
+        verdicts = []
+        for judge in judges:
+            if self.config.bidirectional_judge:
+                v = judge.evaluate_bidirectional(
+                    prompt_id,
+                    prompt_text,
+                    base_text,
+                    tuned_text,
+                )
+            else:
+                v = judge.evaluate(
+                    prompt_id=prompt_id,
+                    prompt_text=prompt_text,
+                    base_text=base_text,
+                    tuned_text=tuned_text,
+                )
+            verdicts.append(v)
+        return verdicts
+
+    @staticmethod
+    def _aggregate_verdicts(
+        verdicts: list[JudgeVerdict],
+        judge_models: list[str],
+    ) -> MultiJudgeVerdict:
+        """Aggregate multiple judge verdicts via majority vote."""
+        # Convert each verdict to canonical preference (base/tuned/tie)
+        canonical = []
+        for v in verdicts:
+            canonical.append(PairwiseJudge._to_canonical(v))
+
+        # Majority vote
+        counts = Counter(canonical)
+        winner = counts.most_common(1)[0][0]
+
+        # Map back to A/B (using a_is_base=True convention)
+        consensus: Literal["A", "B", "tie"]
+        if winner == "base":
+            consensus = "A"
+        elif winner == "tuned":
+            consensus = "B"
+        else:
+            consensus = "tie"
+
+        agreement = counts[winner] / len(verdicts)
+
+        return MultiJudgeVerdict(
+            verdicts=verdicts,
+            judge_models=judge_models,
+            consensus_preferred=consensus,
+            agreement_ratio=round(agreement, 2),
         )
 
     def _invoke_base(self, prompt: TestPrompt) -> ModelOutput:
@@ -205,21 +291,14 @@ class ComparisonRunner:
         wc_deltas = []
 
         for r in results:
-            if r.judge_verdict:
-                if r.judge_verdict.a_is_base:
-                    if r.judge_verdict.preferred == "A":
-                        base_wins += 1
-                    elif r.judge_verdict.preferred == "B":
-                        tuned_wins += 1
-                    else:
-                        ties += 1
+            preferred_source = self._get_effective_verdict(r)
+            if preferred_source:
+                if preferred_source == "base":
+                    base_wins += 1
+                elif preferred_source == "tuned":
+                    tuned_wins += 1
                 else:
-                    if r.judge_verdict.preferred == "A":
-                        tuned_wins += 1
-                    elif r.judge_verdict.preferred == "B":
-                        base_wins += 1
-                    else:
-                        ties += 1
+                    ties += 1
 
             slop_deltas.append(r.tuned_analysis.slop_ratio - r.base_analysis.slop_ratio)
             mtld_deltas.append(r.tuned_analysis.mtld - r.base_analysis.mtld)
@@ -242,3 +321,29 @@ class ComparisonRunner:
             mean_word_count_delta=round(sum(wc_deltas) / n, 1),
             is_mock=settings.fine_tuning_mock_mode,
         )
+
+    @staticmethod
+    def _get_effective_verdict(result: PromptComparisonResult) -> str | None:
+        """Get the canonical winner from either multi-judge or single-judge verdict.
+
+        Returns "base", "tuned", "tie", or None (no judge).
+        """
+        if result.multi_judge_verdict:
+            pref = result.multi_judge_verdict.consensus_preferred
+        elif result.judge_verdict:
+            pref = result.judge_verdict.preferred
+        else:
+            return None
+
+        if pref == "tie":
+            return "tie"
+
+        # Use judge_verdict for a_is_base mapping
+        verdict = result.judge_verdict
+        if verdict is None:
+            return "tie"
+
+        if verdict.a_is_base:
+            return "base" if pref == "A" else "tuned"
+        else:
+            return "tuned" if pref == "A" else "base"

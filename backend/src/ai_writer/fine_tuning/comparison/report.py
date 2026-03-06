@@ -148,10 +148,15 @@ class ReportGenerator:
             v = result.judge_verdict
             label_a = "base" if v.a_is_base else "tuned"
             label_b = "tuned" if v.a_is_base else "base"
-            lines.append("--- JUDGE VERDICT ---")
+            mode = "[BIDIRECTIONAL]" if v.is_bidirectional else "[SINGLE-PASS]"
+            lines.append(f"--- JUDGE VERDICT {mode} ---")
             lines.append(
                 f"  Preferred: {v.preferred} ({label_a if v.preferred == 'A' else label_b if v.preferred == 'B' else 'tie'})"
             )
+            if v.is_bidirectional:
+                lines.append(
+                    f"  Position agreed: {'Yes' if v.position_agreed else 'No'}"
+                )
             lines.append(
                 f"  {'Dimension':<25} {'A (' + label_a + ')':>10} {'B (' + label_b + ')':>10}"
             )
@@ -170,6 +175,28 @@ class ReportGenerator:
                 f"  {'Prose quality':<25} {v.prose_quality_a:>10} {v.prose_quality_b:>10}"
             )
             lines.append(f"  Reasoning: {v.reasoning}")
+            lines.append("")
+
+        # Multi-judge verdict
+        if result.multi_judge_verdict:
+            mv = result.multi_judge_verdict
+            lines.append("--- MULTI-JUDGE CONSENSUS ---")
+            lines.append(f"  Consensus: {mv.consensus_preferred}")
+            lines.append(f"  Agreement: {mv.agreement_ratio:.0%}")
+            lines.append(f"  Judges: {', '.join(mv.judge_models)}")
+            for i, (model, v) in enumerate(zip(mv.judge_models, mv.verdicts)):
+                canonical = (
+                    "base"
+                    if (v.a_is_base and v.preferred == "A")
+                    or (not v.a_is_base and v.preferred == "B")
+                    else (
+                        "tuned"
+                        if (v.a_is_base and v.preferred == "B")
+                        or (not v.a_is_base and v.preferred == "A")
+                        else "tie"
+                    )
+                )
+                lines.append(f"  [{model}] preferred={canonical}")
             lines.append("")
 
         return lines

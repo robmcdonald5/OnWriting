@@ -23,6 +23,17 @@ def main():
     parser.add_argument("--categories", nargs="+", help="Specific categories to run")
     parser.add_argument("--no-judge", action="store_true", help="Skip LLM-as-judge")
     parser.add_argument(
+        "--no-bidirectional",
+        action="store_true",
+        help="Use single-pass judge evaluation instead of bidirectional",
+    )
+    parser.add_argument(
+        "--judge-models",
+        nargs="+",
+        default=[],
+        help="Additional judge models for cross-validation",
+    )
+    parser.add_argument(
         "--output-dir", default="output/comparisons", help="Output directory"
     )
     parser.add_argument("--tuned-endpoint", default="", help="Tuned model endpoint")
@@ -37,6 +48,8 @@ def main():
         categories=categories,
         output_dir=args.output_dir,
         tuned_model_endpoint=args.tuned_endpoint,
+        bidirectional_judge=not args.no_bidirectional,
+        judge_models=args.judge_models,
     )
 
     runner = ComparisonRunner(config=config)

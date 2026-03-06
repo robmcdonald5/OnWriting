@@ -11,8 +11,8 @@ from ai_writer.fine_tuning.config import ComparisonConfig
 class TestComparisonRunner:
     """Test ComparisonRunner in mock mode."""
 
-    def _make_runner(self, categories=None):
-        config = ComparisonConfig(categories=categories or ["all"])
+    def _make_runner(self, categories=None, **config_kwargs):
+        config = ComparisonConfig(categories=categories or ["all"], **config_kwargs)
         return ComparisonRunner(config=config)
 
     @patch("ai_writer.fine_tuning.comparison.runner.get_settings")
@@ -117,3 +117,102 @@ class TestComparisonRunner:
         # Metric deltas should be computed
         assert isinstance(report.mean_slop_delta, float)
         assert isinstance(report.mean_mtld_delta, float)
+
+    @patch("ai_writer.fine_tuning.comparison.runner.get_settings")
+    @patch("ai_writer.fine_tuning.comparison.runner.invoke")
+    @patch("ai_writer.fine_tuning.comparison.runner.get_llm")
+    def test_bidirectional_comparison(self, mock_get_llm, mock_invoke, mock_settings):
+        """Runner uses bidirectional evaluation when config says so."""
+        settings = MagicMock()
+        settings.fine_tuning_mock_mode = True
+        settings.google_api_key = "test"
+        settings.default_model = "gemini-2.5-flash"
+        settings.default_temperature = 0.7
+        mock_settings.return_value = settings
+
+        mock_invoke.return_value = AIMessage(content="Test prose.")
+
+        runner = self._make_runner(categories=["opening"], bidirectional_judge=True)
+        report = runner.run(with_judge=True)
+
+        for r in report.results:
+            assert r.judge_verdict is not None
+            assert r.judge_verdict.is_bidirectional is True
+            assert r.judge_verdict.position_agreed is True
+
+    @patch("ai_writer.fine_tuning.comparison.runner.get_settings")
+    @patch("ai_writer.fine_tuning.comparison.runner.invoke")
+    @patch("ai_writer.fine_tuning.comparison.runner.get_llm")
+    def test_single_pass_comparison(self, mock_get_llm, mock_invoke, mock_settings):
+        """Runner uses single-pass when bidirectional is disabled."""
+        settings = MagicMock()
+        settings.fine_tuning_mock_mode = True
+        settings.google_api_key = "test"
+        settings.default_model = "gemini-2.5-flash"
+        settings.default_temperature = 0.7
+        mock_settings.return_value = settings
+
+        mock_invoke.return_value = AIMessage(content="Test prose.")
+
+        runner = self._make_runner(categories=["opening"], bidirectional_judge=False)
+        report = runner.run(with_judge=True)
+
+        for r in report.results:
+            assert r.judge_verdict is not None
+            assert r.judge_verdict.is_bidirectional is False
+
+    @patch("ai_writer.fine_tuning.comparison.runner.get_settings")
+    @patch("ai_writer.fine_tuning.comparison.runner.invoke")
+    @patch("ai_writer.fine_tuning.comparison.runner.get_llm")
+    def test_multi_judge_comparison(self, mock_get_llm, mock_invoke, mock_settings):
+        """Runner creates multiple judges when judge_models is non-empty."""
+        settings = MagicMock()
+        settings.fine_tuning_mock_mode = True
+        settings.google_api_key = "test"
+        settings.default_model = "gemini-2.5-flash"
+        settings.default_temperature = 0.7
+        mock_settings.return_value = settings
+
+        mock_invoke.return_value = AIMessage(content="Test prose.")
+
+        runner = self._make_runner(
+            categories=["opening"],
+            judge_models=["openai/gpt-4.1"],
+        )
+        report = runner.run(with_judge=True)
+
+        for r in report.results:
+            assert r.judge_verdict is not None
+            assert r.multi_judge_verdict is not None
+            assert len(r.multi_judge_verdict.verdicts) == 2
+            assert len(r.multi_judge_verdict.judge_models) == 2
+            assert r.multi_judge_verdict.consensus_preferred in ("A", "B", "tie")
+            assert 0.0 <= r.multi_judge_verdict.agreement_ratio <= 1.0
+
+    @patch("ai_writer.fine_tuning.comparison.runner.get_settings")
+    @patch("ai_writer.fine_tuning.comparison.runner.invoke")
+    @patch("ai_writer.fine_tuning.comparison.runner.get_llm")
+    def test_multi_judge_consensus(self, mock_get_llm, mock_invoke, mock_settings):
+        """Multi-judge with all mocks returning tie -> consensus is tie."""
+        settings = MagicMock()
+        settings.fine_tuning_mock_mode = True
+        settings.google_api_key = "test"
+        settings.default_model = "gemini-2.5-flash"
+        settings.default_temperature = 0.7
+        mock_settings.return_value = settings
+
+        mock_invoke.return_value = AIMessage(content="Test prose.")
+
+        runner = self._make_runner(
+            categories=["opening"],
+            judge_models=["openai/gpt-4.1", "anthropic/claude-haiku-4-5"],
+        )
+        report = runner.run(with_judge=True)
+
+        for r in report.results:
+            mv = r.multi_judge_verdict
+            assert mv is not None
+            # All mocks return tie, so consensus should be tie
+            assert mv.consensus_preferred == "tie"
+            assert mv.agreement_ratio == 1.0
+            assert len(mv.verdicts) == 3
