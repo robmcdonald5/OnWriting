@@ -16,6 +16,10 @@ class FineTuningJobConfig(BaseModel):
         default="",
         description="GCS URI of the training JSONL file (gs://bucket/path.jsonl)",
     )
+    validation_data_uri: str = Field(
+        default="",
+        description="GCS URI of validation JSONL file (optional, recommended for overfitting detection)",
+    )
     display_name: str = Field(
         default="ai-writer-sft",
         description="Display name for the tuning job in Vertex AI console",
@@ -24,7 +28,7 @@ class FineTuningJobConfig(BaseModel):
         default=4,
         ge=1,
         le=100,
-        description="Number of training epochs",
+        description="Training epochs. Google recommends 20 for <1k examples",
     )
     adapter_size: Literal[1, 4, 8, 16] = Field(
         default=4,
@@ -33,7 +37,7 @@ class FineTuningJobConfig(BaseModel):
     learning_rate_multiplier: float = Field(
         default=1.0,
         gt=0.0,
-        description="Learning rate multiplier (1.0 = Vertex default)",
+        description="Learning rate multiplier. Google recommends 10.0 for <1k examples",
     )
 
 
@@ -49,8 +53,16 @@ class ComparisonConfig(BaseModel):
         description="Tuned model endpoint (Vertex AI endpoint ID or resource name)",
     )
     judge_model: str = Field(
-        default="gemini-2.5-flash",
-        description="Model used for LLM-as-judge evaluation",
+        default="anthropic/claude-sonnet-4-6",
+        description="Model used for LLM-as-judge evaluation (OpenRouter model ID)",
+    )
+    bidirectional_judge: bool = Field(
+        default=True,
+        description="Run judge in both A/B orderings per prompt (recommended)",
+    )
+    judge_models: list[str] = Field(
+        default_factory=list,
+        description="Additional judge models for cross-validation (run alongside primary judge_model)",
     )
     categories: list[str] = Field(
         default_factory=lambda: ["all"],

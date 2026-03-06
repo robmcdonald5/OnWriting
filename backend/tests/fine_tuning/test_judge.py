@@ -66,3 +66,68 @@ class TestPairwiseJudge:
         ]:
             assert hasattr(verdict, f"{dim}_a")
             assert hasattr(verdict, f"{dim}_b")
+
+    def test_evaluate_forced_ordering(self):
+        """Verify force_a_is_base parameter controls A/B assignment."""
+        judge = PairwiseJudge(mock_mode=True)
+
+        verdict_forced_true = judge.evaluate(
+            prompt_id="forced_true",
+            prompt_text="prompt",
+            base_text="base",
+            tuned_text="tuned",
+            force_a_is_base=True,
+        )
+        assert verdict_forced_true.a_is_base is True
+
+        verdict_forced_false = judge.evaluate(
+            prompt_id="forced_false",
+            prompt_text="prompt",
+            base_text="base",
+            tuned_text="tuned",
+            force_a_is_base=False,
+        )
+        assert verdict_forced_false.a_is_base is False
+
+    def test_evaluate_bidirectional_agreement(self):
+        """Both orderings agree (mock returns tie) -> confident tie."""
+        judge = PairwiseJudge(mock_mode=True)
+        verdict = judge.evaluate_bidirectional(
+            prompt_id="bidir_agree",
+            prompt_text="prompt",
+            base_text="base",
+            tuned_text="tuned",
+        )
+
+        assert verdict.is_bidirectional is True
+        assert verdict.position_agreed is True
+        assert verdict.preferred == "tie"
+        assert verdict.a_is_base is True
+        assert "[BIDIRECTIONAL]" in verdict.reasoning
+
+    def test_evaluate_bidirectional_fields(self):
+        """Bidirectional verdict has all required score fields."""
+        judge = PairwiseJudge(mock_mode=True)
+        verdict = judge.evaluate_bidirectional(
+            prompt_id="bidir_fields",
+            prompt_text="prompt",
+            base_text="base",
+            tuned_text="tuned",
+        )
+
+        for dim in [
+            "style_adherence",
+            "character_voice",
+            "outline_adherence",
+            "pacing",
+            "prose_quality",
+        ]:
+            score_a = getattr(verdict, f"{dim}_a")
+            score_b = getattr(verdict, f"{dim}_b")
+            assert 1 <= score_a <= 4
+            assert 1 <= score_b <= 4
+
+    def test_openrouter_model_default(self):
+        """Default judge model should be Claude Sonnet 4.6 via OpenRouter."""
+        judge = PairwiseJudge(mock_mode=True)
+        assert judge.model == "anthropic/claude-sonnet-4-6"
