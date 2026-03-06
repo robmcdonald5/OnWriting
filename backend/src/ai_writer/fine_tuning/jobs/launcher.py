@@ -59,6 +59,8 @@ class FineTuningLauncher:
         logger.info("[MOCK] Launched SFT job: %s", job_name)
         logger.info("[MOCK]   Model: %s", config.source_model)
         logger.info("[MOCK]   Data: %s", config.training_data_uri)
+        if config.validation_data_uri:
+            logger.info("[MOCK]   Validation: %s", config.validation_data_uri)
         logger.info(
             "[MOCK]   Epochs: %d, Adapter: %d", config.epochs, config.adapter_size
         )
@@ -89,10 +91,14 @@ class FineTuningLauncher:
 
         aiplatform.init(project=self.project_id, location=self.region)
 
-        sft_tuning_job = aiplatform.SupervisedTuningJob(
-            source_model=config.source_model,
-            train_dataset=config.training_data_uri,
-        )
+        tuning_kwargs = {
+            "source_model": config.source_model,
+            "train_dataset": config.training_data_uri,
+        }
+        if config.validation_data_uri:
+            tuning_kwargs["validation_dataset"] = config.validation_data_uri
+
+        sft_tuning_job = aiplatform.SupervisedTuningJob(**tuning_kwargs)
 
         sft_tuning_job.run(
             display_name=config.display_name,

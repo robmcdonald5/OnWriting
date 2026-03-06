@@ -33,3 +33,18 @@ class TestFineTuningLauncher:
         result = launcher.launch(config)
         assert result.is_mock
         assert result.display_name == "custom-job"
+
+    def test_launch_with_validation_dataset(self, caplog):
+        """Validation URI is logged in mock mode."""
+        import logging
+
+        with caplog.at_level(logging.INFO):
+            launcher = FineTuningLauncher(mock_mode=True)
+            config = FineTuningJobConfig(
+                training_data_uri="gs://test/data.jsonl",
+                validation_data_uri="gs://test/val.jsonl",
+            )
+            result = launcher.launch(config)
+
+        assert result.is_mock
+        assert any("gs://test/val.jsonl" in msg for msg in caplog.messages)

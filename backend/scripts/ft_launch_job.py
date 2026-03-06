@@ -31,6 +31,9 @@ def main():
     parser.add_argument(
         "--lr-multiplier", type=float, default=1.0, help="Learning rate multiplier"
     )
+    parser.add_argument(
+        "--validation-data", default="", help="GCS URI of validation JSONL"
+    )
     args = parser.parse_args()
 
     data_uri = args.data
@@ -43,6 +46,7 @@ def main():
     config = FineTuningJobConfig(
         source_model=args.model,
         training_data_uri=data_uri,
+        validation_data_uri=args.validation_data,
         display_name=args.name,
         epochs=args.epochs,
         adapter_size=args.adapter_size,
