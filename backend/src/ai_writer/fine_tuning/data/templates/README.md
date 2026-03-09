@@ -1,6 +1,6 @@
-# Training Data Templates
+# Training Data Templates (Reference Only)
 
-Example JSONL files demonstrating the correct Vertex AI training data format.
+These are **reference examples** demonstrating the correct Vertex AI training data format. They are NOT auto-discovered for training — use `training/` for actual training data.
 
 ## Format
 
@@ -14,28 +14,25 @@ Each line is a JSON object representing one conversation:
   },
   "contents": [
     {"role": "user", "parts": [{"text": "Input prompt"}]},
-    {"role": "model", "parts": [{"text": "Desired output (training target)"}}
+    {"role": "model", "parts": [{"text": "Desired output (training target)"}]}
   ]
 }
 ```
 
 ## Files
 
-- **`scene_writing.jsonl`** — Scene writing examples (outline → prose). Use as a template for training the Scene Writer on specific writing styles.
-- **`style_editing.jsonl`** — Style editing examples (weak prose → strong prose). Use as a template for training on prose revision tasks.
+- **`scene_writing.jsonl`** — Scene writing examples (outline → prose)
+- **`style_editing.jsonl`** — Style editing examples (weak prose → strong prose)
 
 ## Adding Real Training Data
 
-1. Copy one of the template files as a starting point
-2. Replace mock examples with real pipeline outputs (use `scripts/ft_convert_outputs.py`)
-3. Validate with `scripts/ft_validate_data.py`
-4. Aim for 100-500 examples for creative writing tasks
-5. Each example can be up to 131,072 tokens
+Place your JSONL files in `training/` (one directory up) — they are auto-discovered by the registry. See `training/README.md` for details.
+
+Validate with: `poetry run python scripts/ft_validate_data.py <path.jsonl>`
 
 ## Guidelines
 
 - **System instruction**: Keep consistent across examples of the same type
 - **User turn**: Include enough context (scene outline, character details, tone)
-- **Model turn**: This is the training target — use your best, editor-approved prose
+- **Model turn**: This is the training target — use human-authored prose, not LLM output
 - **Quality over quantity**: 200 excellent examples > 1000 mediocre ones
-- Avoid training on prose that still has slop or structural issues

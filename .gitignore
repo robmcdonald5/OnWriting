@@ -1,6 +1,9 @@
 # Generated pipeline output
 backend/output/
 
+# Compiled fine-tuning data (regenerated on demand)
+backend/src/ai_writer/fine_tuning/data/compiled/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
