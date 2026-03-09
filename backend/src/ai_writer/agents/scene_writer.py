@@ -20,11 +20,12 @@ _PROSE_DELIMITER = "---PROSE---"
 
 # Planning questions prepended to the user message to force concrete choices
 _PLANNING_PREAMBLE = f"""\
-Before writing, answer these four questions briefly (1-2 sentences each):
+Before writing, answer these five questions briefly (1-2 sentences each):
 1. What is the dominant physical sensation in this scene (not emotion — sensation)?
 2. What single physical action most reveals the POV character's internal state?
 3. What should remain unsaid but felt by the reader?
 4. List 4 different sentence-opening strategies you will use (e.g., action verb, dialogue, subordinate clause, sensory image).
+5. What does the reader NOT learn in the first paragraph? (e.g., character name, setting details, backstory)
 
 After your answers, write the delimiter "{_PROSE_DELIMITER}" on its own line, \
 then write the full scene prose.
@@ -47,7 +48,7 @@ def _extract_prose(raw_output: str) -> str:
 
     # Fallback: look for numbered answers (1. ... 2. ... 3. ...) then prose
     # Find the last numbered answer and take everything after the next blank line
-    pattern = r"^4\.\s.*?$"
+    pattern = r"^5\.\s.*?$"
     match = re.search(pattern, raw_output, re.MULTILINE)
     if match:
         after_answers = raw_output[match.end() :]

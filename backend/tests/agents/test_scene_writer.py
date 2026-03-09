@@ -556,7 +556,8 @@ class TestExtractProse:
     def test_fallback_numbered_answers(self):
         raw = (
             "1. Cold air.\n2. She grips the wheel.\n3. Fear unsaid.\n"
-            "4. Action verb, dialogue, subordinate clause, sensory image.\n\n"
+            "4. Action verb, dialogue, subordinate clause, sensory image.\n"
+            "5. Character name and backstory.\n\n"
             "The hull creaked."
         )
         assert _extract_prose(raw) == "The hull creaked."
