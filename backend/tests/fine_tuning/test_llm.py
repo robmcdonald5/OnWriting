@@ -23,6 +23,17 @@ class TestVertexLLM:
         assert len(result.content) > 0
 
 
+    def test_thinking_budget_parameter_accepted(self):
+        """get_vertex_llm accepts thinking_budget without error in mock mode."""
+        llm = get_vertex_llm(mock_mode=True, thinking_budget=0)
+        assert isinstance(llm, _MockTunedLLM)
+
+    def test_thinking_budget_default_is_zero(self):
+        """Default thinking_budget is 0 (disabled)."""
+        llm = get_vertex_llm(mock_mode=True)
+        assert isinstance(llm, _MockTunedLLM)
+
+
 class TestOpenRouterLLM:
     def test_mock_mode_returns_mock(self):
         llm = get_openrouter_llm(mock_mode=True)
