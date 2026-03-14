@@ -65,6 +65,7 @@ def get_vertex_llm(
     model_endpoint: str = "",
     temperature: float = 0.7,
     mock_mode: bool | None = None,
+    thinking_budget: int = 0,
 ) -> Runnable:
     """Get a Vertex AI LLM for fine-tuned model inference.
 
@@ -73,6 +74,8 @@ def get_vertex_llm(
             If empty, uses settings.vertex_tuned_model_endpoint.
         temperature: Sampling temperature.
         mock_mode: Override mock mode. None = use settings.fine_tuning_mock_mode.
+        thinking_budget: Thinking token budget. 0 disables thinking (recommended
+            by Google for SFT-tuned models). -1 = dynamic. Positive int = cap.
 
     Returns:
         A Runnable that returns AIMessage.
@@ -96,14 +99,20 @@ def get_vertex_llm(
             "Install with: poetry install --with fine-tuning"
         ) from exc
 
-    logger.info("Creating Vertex AI LLM for endpoint: %s", endpoint)
-    llm: Runnable[Any, AIMessage] = ChatVertexAI(
-        model_name=endpoint,
-        project=settings.vertex_project_id,
-        location=settings.vertex_region,
-        temperature=temperature,
-        api_key=settings.vertex_api_key or None,
+    logger.info(
+        "Creating Vertex AI LLM for endpoint: %s (thinking_budget=%d)",
+        endpoint,
+        thinking_budget,
     )
+    vertex_kwargs: dict[str, Any] = {
+        "model_name": endpoint,
+        "project": settings.vertex_project_id,
+        "location": settings.vertex_region,
+        "temperature": temperature,
+        "api_key": settings.vertex_api_key or None,
+        "thinking_budget": thinking_budget,
+    }
+    llm: Runnable[Any, AIMessage] = ChatVertexAI(**vertex_kwargs)
     return llm
 
 
