@@ -232,6 +232,7 @@ class ComparisonRunner:
         llm = get_vertex_llm(
             model_endpoint=self.config.tuned_model_endpoint,
             temperature=self.config.temperature,
+            thinking_budget=self.config.thinking_budget,
         )
         messages = [
             SystemMessage(content=prompt.system_prompt),
