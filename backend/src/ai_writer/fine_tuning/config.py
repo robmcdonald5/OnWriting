@@ -25,19 +25,30 @@ class FineTuningJobConfig(BaseModel):
         description="Display name for the tuning job in Vertex AI console",
     )
     epochs: int = Field(
-        default=4,
+        default=20,
         ge=1,
         le=100,
-        description="Training epochs. Google recommends 20 for <1k examples",
+        description=(
+            "Training epochs. Google recommends 20 for <1k examples with avg context "
+            "<500 tokens, 10 for >=1k examples or longer contexts. Leave unset in CLI "
+            "to let Vertex auto-select."
+        ),
     )
-    adapter_size: Literal[1, 4, 8, 16] = Field(
+    adapter_size: Literal[1, 2, 4, 8, 16] = Field(
         default=4,
-        description="LoRA adapter size (1, 4, 8, 16). 4 is good for style/tone tasks",
+        description=(
+            "LoRA adapter size. 4 is recommended for style/tone tasks with small "
+            "datasets. Use 8+ for complex reasoning tasks with larger datasets."
+        ),
     )
     learning_rate_multiplier: float = Field(
-        default=1.0,
+        default=10.0,
         gt=0.0,
-        description="Learning rate multiplier. Google recommends 10.0 for <1k examples",
+        description=(
+            "Learning rate multiplier. Google recommends 10.0 for <1k examples with "
+            "avg context <500 tokens, 5.0 for larger datasets. Reduce if validation "
+            "loss diverges."
+        ),
     )
 
 
@@ -75,4 +86,13 @@ class ComparisonConfig(BaseModel):
     temperature: float = Field(
         default=0.7,
         description="Temperature for both models during comparison",
+    )
+    thinking_budget: int = Field(
+        default=0,
+        ge=-1,
+        description=(
+            "Thinking budget for the tuned model. 0 disables thinking (recommended "
+            "by Google for SFT-tuned models). -1 = dynamic (model decides). "
+            "Positive int = token cap."
+        ),
     )
