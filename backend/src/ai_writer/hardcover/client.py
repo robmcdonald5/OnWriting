@@ -4,7 +4,16 @@ import logging
 import time
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
+from ai_writer.hardcover.queries import (
+    BOOK_BY_IDS,
+    LIST_BOOKS,
+    MOST_READ_BOOKS,
+    SEARCH_BOOKS,
+    TOP_RATED_BOOKS,
+)
 from ai_writer.hardcover.schemas import HardcoverAuthor, HardcoverBook
 
 logger = logging.getLogger("ai_writer.hardcover.client")
@@ -23,15 +32,35 @@ class HardcoverClient:
     Args:
         api_key: Hardcover API bearer token.
         request_delay: Seconds to wait between requests.
+        session: Optional requests.Session for dependency injection.
     """
 
-    def __init__(self, api_key: str, request_delay: float = REQUEST_DELAY):
+    def __init__(
+        self,
+        api_key: str,
+        request_delay: float = REQUEST_DELAY,
+        session: requests.Session | None = None,
+    ):
         if not api_key:
             raise ValueError("Hardcover API key is required")
         self._api_key = api_key
         self._request_delay = request_delay
         self._last_request_time: float = 0.0
         self._request_count = 0
+        self._session = session or self._create_session()
+
+    @staticmethod
+    def _create_session() -> requests.Session:
+        """Create a session with retry logic for transient failures."""
+        session = requests.Session()
+        retries = Retry(
+            total=3,
+            backoff_factor=0.5,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["POST"],
+        )
+        session.mount("https://", HTTPAdapter(max_retries=retries))
+        return session
 
     @property
     def request_count(self) -> int:
@@ -58,7 +87,7 @@ class HardcoverClient:
             The 'data' portion of the GraphQL response.
 
         Raises:
-            HardcoverAPIError: If the API returns errors.
+            HardcoverAPIError: If the API returns errors without data.
             requests.RequestException: On network failures.
         """
         self._rate_limit()
@@ -73,8 +102,10 @@ class HardcoverClient:
 
         logger.debug("Executing GraphQL query (request #%d)", self._request_count + 1)
 
-        response = requests.post(API_URL, json=payload, headers=headers, timeout=30)
         self._last_request_time = time.time()
+        response = self._session.post(
+            API_URL, json=payload, headers=headers, timeout=30
+        )
         self._request_count += 1
 
         response.raise_for_status()
@@ -82,7 +113,13 @@ class HardcoverClient:
 
         if "errors" in result:
             error_messages = [e.get("message", str(e)) for e in result["errors"]]
-            raise HardcoverAPIError(f"GraphQL errors: {'; '.join(error_messages)}")
+            if result.get("data"):
+                logger.warning(
+                    "GraphQL partial errors (data returned): %s",
+                    "; ".join(error_messages),
+                )
+            else:
+                raise HardcoverAPIError(f"GraphQL errors: {'; '.join(error_messages)}")
 
         return result.get("data", {})
 
@@ -142,8 +179,6 @@ class HardcoverClient:
         Returns:
             List of parsed books.
         """
-        from ai_writer.hardcover.queries import TOP_RATED_BOOKS
-
         data = self._execute(
             TOP_RATED_BOOKS,
             {"min_ratings": min_ratings, "limit": limit, "offset": offset},
@@ -163,8 +198,6 @@ class HardcoverClient:
         Returns:
             List of parsed books.
         """
-        from ai_writer.hardcover.queries import MOST_READ_BOOKS
-
         data = self._execute(
             MOST_READ_BOOKS,
             {"min_read": min_read, "limit": limit, "offset": offset},
@@ -183,15 +216,20 @@ class HardcoverClient:
         Returns:
             List of parsed books.
         """
-        from ai_writer.hardcover.queries import SEARCH_BOOKS
-
         data = self._execute(SEARCH_BOOKS, {"query": query, "per_page": per_page})
         search_data = data.get("search", {})
         raw_ids = search_data.get("ids", [])
         if not raw_ids:
             return []
-        # Search returns IDs as strings; convert to ints for book fetch
-        int_ids = [int(id_val) for id_val in raw_ids]
+        # Search returns IDs as strings; convert to ints defensively
+        int_ids = []
+        for id_val in raw_ids:
+            try:
+                int_ids.append(int(id_val))
+            except (ValueError, TypeError):
+                logger.warning("Skipping non-numeric search ID: %r", id_val)
+        if not int_ids:
+            return []
         return self.get_books_by_ids(int_ids)
 
     def get_books_by_ids(self, ids: list[int]) -> list[HardcoverBook]:
@@ -203,8 +241,6 @@ class HardcoverClient:
         Returns:
             List of parsed books.
         """
-        from ai_writer.hardcover.queries import BOOK_BY_IDS
-
         data = self._execute(BOOK_BY_IDS, {"ids": ids})
         return [self._parse_book(b) for b in data.get("books", [])]
 
@@ -217,8 +253,6 @@ class HardcoverClient:
         Returns:
             List of parsed books.
         """
-        from ai_writer.hardcover.queries import LIST_BOOKS
-
         data = self._execute(LIST_BOOKS, {"id": list_id})
         list_data = data.get("lists_by_pk") or {}
         list_books = list_data.get("list_books", [])
