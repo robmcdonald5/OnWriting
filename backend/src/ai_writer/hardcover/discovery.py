@@ -5,6 +5,7 @@ search), deduplicates by book ID, and scores all results.
 """
 
 import logging
+from collections.abc import Callable
 
 from ai_writer.hardcover.client import HardcoverClient
 from ai_writer.hardcover.schemas import DiscoveryReport, HardcoverBook, ScoredBook
@@ -61,6 +62,9 @@ class BookDiscovery:
     Strategies run sequentially with deduplication by book ID.
     After collection, all unique books are scored and sorted.
 
+    This instance accumulates state across calls. Use reset() to clear
+    before a new run.
+
     Args:
         client: HardcoverClient instance for API access.
         scorer: BookScorer instance (optional, creates default if None).
@@ -75,6 +79,13 @@ class BookDiscovery:
         self._scorer = scorer or BookScorer()
         self._seen_ids: set[int] = set()
         self._books: dict[int, tuple[HardcoverBook, str]] = {}
+        self._total_fetched: int = 0
+
+    def reset(self) -> None:
+        """Clear collected books for reuse. Does not reset client request_count."""
+        self._seen_ids.clear()
+        self._books.clear()
+        self._total_fetched = 0
 
     def _add_books(self, books: list[HardcoverBook], source: str) -> int:
         """Add books to collection, deduplicating by ID.
@@ -86,6 +97,7 @@ class BookDiscovery:
         Returns:
             Number of new (non-duplicate) books added.
         """
+        self._total_fetched += len(books)
         new_count = 0
         for book in books:
             if book.id not in self._seen_ids:
@@ -112,13 +124,19 @@ class BookDiscovery:
         )
         total_new = 0
         for page in range(pages):
-            offset = page * per_page
-            books = self._client.get_top_rated(
-                min_ratings=min_ratings, limit=per_page, offset=offset
-            )
-            new = self._add_books(books, "top_rated")
-            total_new += new
-            logger.info("  Page %d: %d books (%d new)", page + 1, len(books), new)
+            try:
+                offset = page * per_page
+                books = self._client.get_top_rated(
+                    min_ratings=min_ratings, limit=per_page, offset=offset
+                )
+                new = self._add_books(books, "top_rated")
+                total_new += new
+                logger.info("  Page %d: %d books (%d new)", page + 1, len(books), new)
+            except Exception:
+                logger.warning(
+                    "top_rated page %d failed, skipping", page + 1, exc_info=True
+                )
+                continue
         return total_new
 
     def run_most_read(
@@ -137,13 +155,19 @@ class BookDiscovery:
         logger.info("Strategy: most_read (%d pages, min %d reads)", pages, min_read)
         total_new = 0
         for page in range(pages):
-            offset = page * per_page
-            books = self._client.get_most_read(
-                min_read=min_read, limit=per_page, offset=offset
-            )
-            new = self._add_books(books, "most_read")
-            total_new += new
-            logger.info("  Page %d: %d books (%d new)", page + 1, len(books), new)
+            try:
+                offset = page * per_page
+                books = self._client.get_most_read(
+                    min_read=min_read, limit=per_page, offset=offset
+                )
+                new = self._add_books(books, "most_read")
+                total_new += new
+                logger.info("  Page %d: %d books (%d new)", page + 1, len(books), new)
+            except Exception:
+                logger.warning(
+                    "most_read page %d failed, skipping", page + 1, exc_info=True
+                )
+                continue
         return total_new
 
     def run_priority_authors(
@@ -166,11 +190,19 @@ class BookDiscovery:
         )
         total_new = 0
         for author in author_list:
-            books = self._client.search_books(author, per_page=per_author)
-            new = self._add_books(books, "priority_authors")
-            total_new += new
-            if new > 0:
-                logger.info("  %s: %d books (%d new)", author, len(books), new)
+            try:
+                books = self._client.search_books(author, per_page=per_author)
+                new = self._add_books(books, "priority_authors")
+                total_new += new
+                if new > 0:
+                    logger.info("  %s: %d books (%d new)", author, len(books), new)
+            except Exception:
+                logger.warning(
+                    "priority_authors '%s' failed, skipping",
+                    author,
+                    exc_info=True,
+                )
+                continue
         logger.info("  Total new from priority authors: %d", total_new)
         return total_new
 
@@ -207,7 +239,7 @@ class BookDiscovery:
         Raises:
             ValueError: If strategy name is unknown.
         """
-        strategy_map = {
+        strategy_map: dict[str, Callable[..., int]] = {
             "top_rated": self.run_top_rated,
             "most_read": self.run_most_read,
             "priority_authors": self.run_priority_authors,
@@ -238,7 +270,7 @@ class BookDiscovery:
 
         report = DiscoveryReport(
             scored_books=scored,
-            total_books_found=len(self._seen_ids),
+            total_books_found=self._total_fetched,
             unique_books=len(self._seen_ids),
             api_calls_made=self._client.request_count,
             strategies_used=strategies_used,
