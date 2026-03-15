@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # OpenRouter (for LLM-as-judge via cross-family models)
     openrouter_api_key: str = ""
 
+    # Hardcover API (optional — for book discovery)
+    hardcover_api_key: str = ""
+
     # Vertex AI (optional — for fine-tuning workflows)
     vertex_api_key: str = ""
     vertex_project_id: str = ""
