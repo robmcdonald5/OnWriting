@@ -3,11 +3,22 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from ai_writer.hardcover.client import HardcoverAPIError, HardcoverClient
 
-
 # --- Fixtures ---
+
+
+def _make_client(
+    request_delay: float = 0,
+) -> tuple[HardcoverClient, MagicMock]:
+    """Create a client with an injectable mock session."""
+    mock_session = MagicMock(spec=requests.Session)
+    client = HardcoverClient(
+        api_key="test-key", request_delay=request_delay, session=mock_session
+    )
+    return client, mock_session
 
 
 def _mock_graphql_response(books: list[dict]) -> dict:
@@ -53,6 +64,11 @@ class TestClientConstruction:
         client = HardcoverClient(api_key="test-key")
         assert client.request_count == 0
 
+    def test_accepts_injected_session(self):
+        mock_session = MagicMock(spec=requests.Session)
+        client = HardcoverClient(api_key="test-key", session=mock_session)
+        assert client._session is mock_session
+
 
 # --- Parsing Tests ---
 
@@ -96,16 +112,15 @@ class TestParseBook:
 
 
 class TestGetTopRated:
-    @patch("ai_writer.hardcover.client.requests.post")
-    def test_fetches_and_parses(self, mock_post):
+    def test_fetches_and_parses(self):
+        client, mock_session = _make_client()
         mock_response = MagicMock()
         mock_response.json.return_value = _mock_graphql_response(
             [_raw_book(1, "Book A"), _raw_book(2, "Book B")]
         )
         mock_response.raise_for_status = MagicMock()
-        mock_post.return_value = mock_response
+        mock_session.post.return_value = mock_response
 
-        client = HardcoverClient(api_key="test-key", request_delay=0)
         books = client.get_top_rated(min_ratings=100, limit=50)
 
         assert len(books) == 2
@@ -113,43 +128,39 @@ class TestGetTopRated:
         assert books[1].title == "Book B"
         assert client.request_count == 1
 
-    @patch("ai_writer.hardcover.client.requests.post")
-    def test_empty_response(self, mock_post):
+    def test_empty_response(self):
+        client, mock_session = _make_client()
         mock_response = MagicMock()
         mock_response.json.return_value = {"data": {"books": []}}
         mock_response.raise_for_status = MagicMock()
-        mock_post.return_value = mock_response
+        mock_session.post.return_value = mock_response
 
-        client = HardcoverClient(api_key="test-key", request_delay=0)
         books = client.get_top_rated()
         assert books == []
 
 
 class TestGetMostRead:
-    @patch("ai_writer.hardcover.client.requests.post")
-    def test_fetches_and_parses(self, mock_post):
+    def test_fetches_and_parses(self):
+        client, mock_session = _make_client()
         mock_response = MagicMock()
         mock_response.json.return_value = _mock_graphql_response(
             [_raw_book(1, "Popular Book")]
         )
         mock_response.raise_for_status = MagicMock()
-        mock_post.return_value = mock_response
+        mock_session.post.return_value = mock_response
 
-        client = HardcoverClient(api_key="test-key", request_delay=0)
         books = client.get_most_read(min_read=500, limit=50)
         assert len(books) == 1
         assert books[0].title == "Popular Book"
 
 
 class TestSearchBooks:
-    @patch("ai_writer.hardcover.client.requests.post")
-    def test_parses_search_results(self, mock_post):
+    def test_parses_search_results(self):
         """Search is two-step: first gets IDs, then fetches full books."""
+        client, mock_session = _make_client()
         # First call returns search IDs, second returns full book data
         search_response = MagicMock()
-        search_response.json.return_value = {
-            "data": {"search": {"ids": ["1"]}}
-        }
+        search_response.json.return_value = {"data": {"search": {"ids": ["1"]}}}
         search_response.raise_for_status = MagicMock()
 
         book_response = MagicMock()
@@ -158,74 +169,95 @@ class TestSearchBooks:
         )
         book_response.raise_for_status = MagicMock()
 
-        mock_post.side_effect = [search_response, book_response]
+        mock_session.post.side_effect = [search_response, book_response]
 
-        client = HardcoverClient(api_key="test-key", request_delay=0)
         books = client.search_books("Raymond Carver", per_page=10)
         assert len(books) == 1
         assert books[0].title == "Carver Collection"
         assert client.request_count == 2  # search + fetch
 
-    @patch("ai_writer.hardcover.client.requests.post")
-    def test_empty_search_returns_empty(self, mock_post):
+    def test_empty_search_returns_empty(self):
+        client, mock_session = _make_client()
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "data": {"search": {"ids": []}}
-        }
+        mock_response.json.return_value = {"data": {"search": {"ids": []}}}
         mock_response.raise_for_status = MagicMock()
-        mock_post.return_value = mock_response
+        mock_session.post.return_value = mock_response
 
-        client = HardcoverClient(api_key="test-key", request_delay=0)
         books = client.search_books("Nonexistent Author")
+        assert books == []
+        assert client.request_count == 1  # Only search, no fetch
+
+    def test_skips_non_numeric_ids(self):
+        """Non-numeric IDs in search results are skipped."""
+        client, mock_session = _make_client()
+        search_response = MagicMock()
+        search_response.json.return_value = {
+            "data": {"search": {"ids": ["1", "abc", "3"]}}
+        }
+        search_response.raise_for_status = MagicMock()
+
+        book_response = MagicMock()
+        book_response.json.return_value = _mock_graphql_response(
+            [_raw_book(1, "Book One"), _raw_book(3, "Book Three")]
+        )
+        book_response.raise_for_status = MagicMock()
+
+        mock_session.post.side_effect = [search_response, book_response]
+
+        books = client.search_books("Test Author")
+        assert len(books) == 2
+
+    def test_all_non_numeric_ids_returns_empty(self):
+        """If all search IDs are non-numeric, return empty list."""
+        client, mock_session = _make_client()
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"data": {"search": {"ids": ["abc", "def"]}}}
+        mock_response.raise_for_status = MagicMock()
+        mock_session.post.return_value = mock_response
+
+        books = client.search_books("Test Author")
         assert books == []
         assert client.request_count == 1  # Only search, no fetch
 
 
 class TestGetBooksByIds:
-    @patch("ai_writer.hardcover.client.requests.post")
-    def test_fetches_by_ids(self, mock_post):
+    def test_fetches_by_ids(self):
+        client, mock_session = _make_client()
         mock_response = MagicMock()
         mock_response.json.return_value = _mock_graphql_response(
             [_raw_book(42, "Specific Book")]
         )
         mock_response.raise_for_status = MagicMock()
-        mock_post.return_value = mock_response
+        mock_session.post.return_value = mock_response
 
-        client = HardcoverClient(api_key="test-key", request_delay=0)
         books = client.get_books_by_ids([42])
         assert len(books) == 1
         assert books[0].id == 42
 
 
 class TestGetList:
-    @patch("ai_writer.hardcover.client.requests.post")
-    def test_fetches_list_books(self, mock_post):
+    def test_fetches_list_books(self):
+        client, mock_session = _make_client()
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "data": {
-                "lists_by_pk": {
-                    "list_books": [
-                        {"book": _raw_book(1, "List Book")}
-                    ]
-                }
+                "lists_by_pk": {"list_books": [{"book": _raw_book(1, "List Book")}]}
             }
         }
         mock_response.raise_for_status = MagicMock()
-        mock_post.return_value = mock_response
+        mock_session.post.return_value = mock_response
 
-        client = HardcoverClient(api_key="test-key", request_delay=0)
         books = client.get_list(list_id=123)
         assert len(books) == 1
         assert books[0].title == "List Book"
 
-    @patch("ai_writer.hardcover.client.requests.post")
-    def test_handles_null_list(self, mock_post):
+    def test_handles_null_list(self):
+        client, mock_session = _make_client()
         mock_response = MagicMock()
         mock_response.json.return_value = {"data": {"lists_by_pk": None}}
         mock_response.raise_for_status = MagicMock()
-        mock_post.return_value = mock_response
+        mock_session.post.return_value = mock_response
 
-        client = HardcoverClient(api_key="test-key", request_delay=0)
         books = client.get_list(list_id=999)
         assert books == []
 
@@ -234,27 +266,23 @@ class TestGetList:
 
 
 class TestErrorHandling:
-    @patch("ai_writer.hardcover.client.requests.post")
-    def test_raises_on_graphql_errors(self, mock_post):
+    def test_raises_on_graphql_errors(self):
+        client, mock_session = _make_client()
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "errors": [{"message": "Field not found"}]
-        }
+        mock_response.json.return_value = {"errors": [{"message": "Field not found"}]}
         mock_response.raise_for_status = MagicMock()
-        mock_post.return_value = mock_response
+        mock_session.post.return_value = mock_response
 
-        client = HardcoverClient(api_key="test-key", request_delay=0)
         with pytest.raises(HardcoverAPIError, match="Field not found"):
             client.get_top_rated()
 
-    @patch("ai_writer.hardcover.client.requests.post")
-    def test_request_count_increments(self, mock_post):
+    def test_request_count_increments(self):
+        client, mock_session = _make_client()
         mock_response = MagicMock()
         mock_response.json.return_value = _mock_graphql_response([_raw_book()])
         mock_response.raise_for_status = MagicMock()
-        mock_post.return_value = mock_response
+        mock_session.post.return_value = mock_response
 
-        client = HardcoverClient(api_key="test-key", request_delay=0)
         assert client.request_count == 0
         client.get_top_rated()
         assert client.request_count == 1
@@ -262,18 +290,87 @@ class TestErrorHandling:
         assert client.request_count == 2
 
 
+class TestPartialData:
+    def test_partial_data_returned_when_errors_coexist(self):
+        """When GraphQL returns both errors and data, use the data."""
+        client, mock_session = _make_client()
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "errors": [{"message": "Partial failure"}],
+            "data": {"books": [_raw_book(1, "Partial Book")]},
+        }
+        mock_response.raise_for_status = MagicMock()
+        mock_session.post.return_value = mock_response
+
+        books = client.get_top_rated()
+        assert len(books) == 1
+        assert books[0].title == "Partial Book"
+
+    def test_raises_when_errors_without_data(self):
+        """When GraphQL returns errors but no data, raise."""
+        client, mock_session = _make_client()
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"errors": [{"message": "Total failure"}]}
+        mock_response.raise_for_status = MagicMock()
+        mock_session.post.return_value = mock_response
+
+        with pytest.raises(HardcoverAPIError, match="Total failure"):
+            client.get_top_rated()
+
+
+class TestHTTPErrors:
+    def test_raises_on_http_error(self):
+        client, mock_session = _make_client()
+        mock_response = MagicMock()
+        mock_response.raise_for_status.side_effect = requests.HTTPError(
+            "500 Server Error"
+        )
+        mock_session.post.return_value = mock_response
+
+        with pytest.raises(requests.HTTPError):
+            client.get_top_rated()
+
+    def test_raises_on_connection_error(self):
+        client, mock_session = _make_client()
+        mock_session.post.side_effect = requests.ConnectionError("Connection refused")
+
+        with pytest.raises(requests.ConnectionError):
+            client.get_top_rated()
+
+    def test_raises_on_timeout(self):
+        client, mock_session = _make_client()
+        mock_session.post.side_effect = requests.Timeout("Request timed out")
+
+        with pytest.raises(requests.Timeout):
+            client.get_top_rated()
+
+
+# --- Rate Limiting ---
+
+
 class TestRateLimiting:
     @patch("ai_writer.hardcover.client.time.sleep")
-    @patch("ai_writer.hardcover.client.requests.post")
-    def test_rate_limits_between_requests(self, mock_post, mock_sleep):
+    def test_rate_limits_between_requests(self, mock_sleep):
+        client, mock_session = _make_client(request_delay=1.0)
         mock_response = MagicMock()
         mock_response.json.return_value = _mock_graphql_response([_raw_book()])
         mock_response.raise_for_status = MagicMock()
-        mock_post.return_value = mock_response
+        mock_session.post.return_value = mock_response
 
-        client = HardcoverClient(api_key="test-key", request_delay=1.0)
         client.get_top_rated()
         client.get_top_rated()
 
-        # sleep should be called at least once for rate limiting
         assert mock_sleep.called
+        sleep_duration = mock_sleep.call_args[0][0]
+        assert 0 < sleep_duration <= 1.0
+
+    @patch("ai_writer.hardcover.client.time.sleep")
+    def test_no_rate_limit_on_first_request(self, mock_sleep):
+        client, mock_session = _make_client(request_delay=1.0)
+        mock_response = MagicMock()
+        mock_response.json.return_value = _mock_graphql_response([_raw_book()])
+        mock_response.raise_for_status = MagicMock()
+        mock_session.post.return_value = mock_response
+
+        client.get_top_rated()
+        assert not mock_sleep.called
