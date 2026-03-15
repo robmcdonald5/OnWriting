@@ -4,11 +4,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from ai_writer.hardcover.client import HardcoverClient
+from ai_writer.hardcover.client import HardcoverAPIError, HardcoverClient
 from ai_writer.hardcover.discovery import BookDiscovery
-from ai_writer.hardcover.schemas import HardcoverAuthor, HardcoverBook
-from ai_writer.hardcover.scoring import BookScorer
-
+from ai_writer.hardcover.schemas import HardcoverBook
 
 # --- Helpers ---
 
@@ -198,3 +196,105 @@ class TestReport:
         assert report.api_calls_made == 5
         assert report.strategies_used == ["top_rated"]
         assert report.timestamp  # auto-set
+
+
+# --- Error Resilience Tests ---
+
+
+class TestErrorResilience:
+    def test_top_rated_continues_on_api_error(self):
+        client = _mock_client()
+        client.get_top_rated.side_effect = [
+            HardcoverAPIError("page 1 failed"),
+            [_make_book(1, "Page 2 Book")],
+        ]
+
+        discovery = BookDiscovery(client=client)
+        new = discovery.run_top_rated(pages=2)
+        assert new == 1
+
+    def test_most_read_continues_on_api_error(self):
+        client = _mock_client()
+        client.get_most_read.side_effect = [
+            HardcoverAPIError("page 1 failed"),
+            [_make_book(1, "Page 2 Book")],
+        ]
+
+        discovery = BookDiscovery(client=client)
+        new = discovery.run_most_read(pages=2)
+        assert new == 1
+
+    def test_priority_authors_continues_on_api_error(self):
+        client = _mock_client()
+        client.search_books.side_effect = [
+            HardcoverAPIError("author 1 failed"),
+            [_make_book(1, "Author 2 Book")],
+        ]
+
+        discovery = BookDiscovery(client=client)
+        new = discovery.run_priority_authors(authors=["Author A", "Author B"])
+        assert new == 1
+
+    def test_run_all_survives_total_strategy_failure(self):
+        client = _mock_client()
+        # top_rated fails completely
+        client.get_top_rated.side_effect = HardcoverAPIError("total failure")
+        # most_read and priority_authors succeed
+        client.get_most_read.return_value = [_make_book(1, "Read Book")]
+        client.search_books.return_value = [_make_book(2, "Author Book")]
+
+        discovery = BookDiscovery(client=client)
+        report = discovery.run_all()
+        assert report.unique_books == 2
+
+
+# --- Fetch Counter Tests ---
+
+
+class TestFetchCounter:
+    def test_total_books_found_counts_all_fetches(self):
+        """total_books_found counts duplicates; unique_books does not."""
+        client = _mock_client()
+        book = _make_book(1, "Same Book")
+        client.get_top_rated.return_value = [book]
+        client.get_most_read.return_value = [book]
+
+        discovery = BookDiscovery(client=client)
+        discovery.run_top_rated(pages=1)
+        discovery.run_most_read(pages=1)
+
+        report = discovery._build_report(["top_rated", "most_read"])
+        assert report.total_books_found == 2
+        assert report.unique_books == 1
+
+
+# --- Reset Tests ---
+
+
+class TestReset:
+    def test_reset_clears_state(self):
+        client = _mock_client()
+        client.get_top_rated.return_value = [_make_book(1)]
+
+        discovery = BookDiscovery(client=client)
+        discovery.run_top_rated(pages=1)
+        discovery.reset()
+
+        report = discovery._build_report([])
+        assert report.unique_books == 0
+        assert report.total_books_found == 0
+
+    def test_reset_allows_reuse(self):
+        client = _mock_client()
+        client.get_top_rated.return_value = [_make_book(1, "First Run")]
+
+        discovery = BookDiscovery(client=client)
+        discovery.run_top_rated(pages=1)
+        discovery.reset()
+
+        client.get_top_rated.return_value = [_make_book(2, "Second Run")]
+        discovery.run_top_rated(pages=1)
+
+        report = discovery._build_report(["top_rated"])
+        assert report.unique_books == 1
+        assert report.scored_books[0].book.title == "Second Run"
