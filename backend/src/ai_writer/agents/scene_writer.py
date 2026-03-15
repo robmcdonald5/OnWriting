@@ -8,7 +8,6 @@ import logging
 import re
 
 from ai_writer.agents.base import get_llm, invoke
-from ai_writer.config import get_settings
 from ai_writer.prompts.builders import build_scene_writer_prompt
 from ai_writer.prompts.components import POLISH_ADDENDUM, REVISION_ADDENDUM
 from ai_writer.prompts.configs import SceneWriterPromptConfig
@@ -21,11 +20,12 @@ _PROSE_DELIMITER = "---PROSE---"
 
 # Planning questions prepended to the user message to force concrete choices
 _PLANNING_PREAMBLE = f"""\
-Before writing, answer these four questions briefly (1-2 sentences each):
+Before writing, answer these five questions briefly (1-2 sentences each):
 1. What is the dominant physical sensation in this scene (not emotion — sensation)?
 2. What single physical action most reveals the POV character's internal state?
 3. What should remain unsaid but felt by the reader?
 4. List 4 different sentence-opening strategies you will use (e.g., action verb, dialogue, subordinate clause, sensory image).
+5. What does the reader NOT learn in the first paragraph? (e.g., character name, setting details, backstory)
 
 After your answers, write the delimiter "{_PROSE_DELIMITER}" on its own line, \
 then write the full scene prose.
@@ -48,7 +48,7 @@ def _extract_prose(raw_output: str) -> str:
 
     # Fallback: look for numbered answers (1. ... 2. ... 3. ...) then prose
     # Find the last numbered answer and take everything after the next blank line
-    pattern = r"^4\.\s.*?$"
+    pattern = r"^5\.\s.*?$"
     match = re.search(pattern, raw_output, re.MULTILINE)
     if match:
         after_answers = raw_output[match.end() :]
@@ -86,26 +86,30 @@ def _get_scene_and_characters(state: dict):
 
 def run_scene_writer(state: dict) -> dict:
     """Execute the Scene Writer: scene outline + context → SceneDraft."""
-    settings = get_settings()
-    temp = settings.creative_temperature
-
     scene_outline, characters = _get_scene_and_characters(state)
     story_brief = state["story_brief"]
     tone = story_brief.tone_profile
 
-    # Build config — start from state config, override with runtime tone values
+    # Build config — start from state config, conditionally override with tone
     configs = state.get("prompt_configs", {})
     base_config = configs.get("scene_writer", SceneWriterPromptConfig())
-    config = base_config.model_copy(
-        update={
-            "formality": tone.formality,
-            "darkness": tone.darkness,
-            "humor": tone.humor,
-            "pacing": tone.pacing,
-            "prose_style": tone.prose_style or base_config.prose_style,
-            "target_word_count": scene_outline.target_word_count,
-        }
-    )
+    tone_override = configs.get("tone_override", False)
+
+    if tone_override:
+        config = base_config.model_copy(
+            update={"target_word_count": scene_outline.target_word_count}
+        )
+    else:
+        config = base_config.model_copy(
+            update={
+                "formality": tone.formality,
+                "darkness": tone.darkness,
+                "humor": tone.humor,
+                "pacing": tone.pacing,
+                "prose_style": tone.prose_style or base_config.prose_style,
+                "target_word_count": scene_outline.target_word_count,
+            }
+        )
 
     system_prompt = build_scene_writer_prompt(config)
 
@@ -246,9 +250,9 @@ def run_scene_writer(state: dict) -> dict:
     logger.info("Writing scene %d%s...", scene_outline.scene_number, revision_label)
 
     llm = get_llm(
-        temperature=temp,
-        frequency_penalty=settings.frequency_penalty,
-        presence_penalty=settings.presence_penalty,
+        temperature=config.creative_temperature,
+        frequency_penalty=config.frequency_penalty,
+        presence_penalty=config.presence_penalty,
     )
 
     # Prepend planning questions to the user message for first drafts

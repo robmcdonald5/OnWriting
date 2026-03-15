@@ -7,9 +7,15 @@ Two-tier schema design:
 - SceneMetrics: Per-scene metrics for trend tracking.
 """
 
+from __future__ import annotations
+
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from ai_writer.prompts.configs import AdvisoryPenaltyConfig
 
 
 class EditType(str, Enum):
@@ -156,14 +162,22 @@ class SceneRubric(BaseModel):
     # --- Chain-of-thought reasoning ---
     dimension_reasoning: str = Field(default="")
 
-    def compute_quality_score(self) -> float:
+    def compute_quality_score(
+        self, penalty_config: AdvisoryPenaltyConfig | None = None
+    ) -> float:
         """Weighted average of dimension scores, normalized to 0-1.
 
         Each dimension is scored 1-4, so we normalize:
         (weighted_sum - 1) / (4 - 1) maps [1, 4] -> [0, 1].
 
-        Advisory metrics apply a soft penalty (max 0.18 + 0.06 cross-scene).
+        Advisory metrics apply a soft penalty using values from penalty_config.
+        Falls back to AdvisoryPenaltyConfig defaults if not provided.
         """
+        if penalty_config is None:
+            from ai_writer.prompts.configs import AdvisoryPenaltyConfig
+
+            penalty_config = AdvisoryPenaltyConfig()
+
         dimensions = {
             "style_adherence": self.style_adherence,
             "character_voice": self.character_voice,
@@ -178,23 +192,25 @@ class SceneRubric(BaseModel):
         # Normalize: min possible = 1.0, max possible = 4.0
         normalized = (weighted_sum - 1.0) / 3.0
 
-        # Soft penalty for advisory metrics (max 0.18)
+        # Soft penalty for advisory metrics
         advisory_penalty = 0.0
         if self.opener_monotony:
-            advisory_penalty += 0.04
+            advisory_penalty += penalty_config.opener_monotony
         if self.length_monotony:
-            advisory_penalty += 0.04
+            advisory_penalty += penalty_config.length_monotony
         if self.passive_heavy:
-            advisory_penalty += 0.02
+            advisory_penalty += penalty_config.passive_heavy
         if self.structural_monotony:
-            advisory_penalty += 0.02
+            advisory_penalty += penalty_config.structural_monotony
         if self.low_diversity:
-            advisory_penalty += 0.04
+            advisory_penalty += penalty_config.low_diversity
         if self.vocabulary_basic:
-            advisory_penalty += 0.02
+            advisory_penalty += penalty_config.vocabulary_basic
 
-        # Cross-scene repetition penalty (max 0.06)
-        advisory_penalty += 0.02 * min(self.cross_scene_repetitions, 3)
+        # Cross-scene repetition penalty
+        advisory_penalty += penalty_config.cross_scene_per * min(
+            self.cross_scene_repetitions, penalty_config.cross_scene_max
+        )
 
         return round(max(0.0, min(1.0, normalized - advisory_penalty)), 2)
 
@@ -211,11 +227,15 @@ class SceneRubric(BaseModel):
             ]
         )
 
-    def compute_approved(self) -> bool:
+    def compute_approved(
+        self,
+        penalty_config: AdvisoryPenaltyConfig | None = None,
+        approve_threshold: float = APPROVE_THRESHOLD,
+    ) -> bool:
         """Composite approval: score >= threshold AND no critical failures
         AND deterministic checks pass.
         """
-        score_ok = self.compute_quality_score() >= APPROVE_THRESHOLD
+        score_ok = self.compute_quality_score(penalty_config) >= approve_threshold
         no_critical = not self.has_critical_failure()
         deterministic_ok = self.word_count_in_range and self.tense_consistent
         return score_ok and no_critical and deterministic_ok

@@ -12,6 +12,7 @@ import logging
 from ai_writer.agents.base import get_structured_llm, invoke
 from ai_writer.prompts.builders import build_style_editor_prompt
 from ai_writer.prompts.configs import (
+    AdvisoryPenaltyConfig,
     ProseStructureConfig,
     ScoreCapConfig,
     SlopConfig,
@@ -19,6 +20,7 @@ from ai_writer.prompts.configs import (
     VocabularyConfig,
 )
 from ai_writer.schemas.editing import (
+    APPROVE_THRESHOLD,
     EditFeedback,
     SceneMetrics,
     SceneRubric,
@@ -124,24 +126,37 @@ def run_style_editor(state: dict) -> dict:
 
     # ── Layer 2: LLM evaluation (1 structured call) ──
 
-    # Build config — start from state config, override with runtime tone values
+    # Build config — start from state config, conditionally override with tone
     base_config = configs.get("style_editor", StyleEditorPromptConfig())
-    config = base_config.model_copy(
-        update={
-            "formality": tone.formality,
-            "darkness": tone.darkness,
-            "humor": tone.humor,
-            "pacing": tone.pacing,
-        }
-    )
+    tone_override = configs.get("tone_override", False)
+
+    if tone_override:
+        config = base_config
+    else:
+        config = base_config.model_copy(
+            update={
+                "formality": tone.formality,
+                "darkness": tone.darkness,
+                "humor": tone.humor,
+                "pacing": tone.pacing,
+            }
+        )
 
     system_prompt = build_style_editor_prompt(config)
 
     # Build evaluation context
+    if tone_override:
+        tone_section = (
+            f"## Tone Profile (from config, tone_override=True)\n"
+            f"formality={config.formality}, darkness={config.darkness}, "
+            f"humor={config.humor}, pacing={config.pacing}"
+        )
+    else:
+        tone_section = f"## Tone Profile\n{tone.model_dump_json(indent=2)}"
     eval_context = (
         f"## Scene Outline\n{scene_outline.model_dump_json(indent=2)}\n\n"
         f"## Scene Prose ({latest_draft.word_count} words)\n{prose}\n\n"
-        f"## Tone Profile\n{tone.model_dump_json(indent=2)}"
+        f"{tone_section}"
     )
 
     # Get character voice info
@@ -242,7 +257,8 @@ def run_style_editor(state: dict) -> dict:
 
     logger.info("Evaluating scene %s...", latest_draft.scene_id)
 
-    feedback_llm = get_structured_llm(StyleEditorOutput, temperature=_EVAL_TEMPERATURE)
+    eval_temp = configs.get("eval_temperature", _EVAL_TEMPERATURE)
+    feedback_llm = get_structured_llm(StyleEditorOutput, temperature=eval_temp)
     raw_output = invoke(
         feedback_llm,
         [
@@ -369,8 +385,12 @@ def run_style_editor(state: dict) -> dict:
         dimension_reasoning=llm_output.dimension_reasoning,
     )
 
-    quality_score = rubric.compute_quality_score()
-    approved = rubric.compute_approved()
+    penalty_config = configs.get("advisory_penalties", AdvisoryPenaltyConfig())
+    approve_threshold = configs.get("approve_threshold", APPROVE_THRESHOLD)
+    quality_score = rubric.compute_quality_score(penalty_config)
+    approved = rubric.compute_approved(
+        penalty_config, approve_threshold=approve_threshold
+    )
 
     edit_feedback = EditFeedback(
         scene_id=latest_draft.scene_id,

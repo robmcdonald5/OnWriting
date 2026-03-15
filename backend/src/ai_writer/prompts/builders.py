@@ -12,6 +12,7 @@ from ai_writer.prompts.components import (
     BEAT_OUTLINER_GUIDELINES,
     CHARACTER_ROSTER_GUIDELINES,
     EVALUATION_RUBRIC,
+    EXEMPLAR_PASSAGES,
     ROLE_IDENTITY,
     SCENE_WRITER_GUIDELINES,
     STORY_BRIEF_GUIDELINES,
@@ -103,6 +104,7 @@ def build_scene_writer_prompt(config: SceneWriterPromptConfig) -> str:
             pacing=config.pacing,
             prose_style=config.prose_style,
             target_word_count=config.target_word_count,
+            exemplar_passages=EXEMPLAR_PASSAGES,
         ),
         "",
         config.closing_motivation,
@@ -122,6 +124,8 @@ def build_style_editor_prompt(config: StyleEditorPromptConfig) -> str:
             humor=config.humor,
             pacing=config.pacing,
             normalization_guidance=config.normalization_guidance,
+            rubric_cv_threshold=config.rubric_cv_threshold,
+            rubric_opener_percent=config.rubric_opener_percent,
         ),
     ]
     return "\n".join(parts)
