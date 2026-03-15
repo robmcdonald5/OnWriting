@@ -11,7 +11,6 @@ from ai_writer.hardcover.scoring import (
     _score_rating_quality,
 )
 
-
 # --- Award Signal Tests ---
 
 
@@ -62,9 +61,7 @@ class TestAwardSignal:
         assert _score_award_signal(book) == 1.0
 
     def test_no_awards(self):
-        book = HardcoverBook(
-            id=1, title="Test", description="A nice book about cats."
-        )
+        book = HardcoverBook(id=1, title="Test", description="A nice book about cats.")
         assert _score_award_signal(book) == 0.0
 
     def test_award_in_tags(self):
@@ -74,6 +71,24 @@ class TestAwardSignal:
             cached_tags={"Award": ["Booker Prize Winner"]},
         )
         assert _score_award_signal(book) >= 0.25
+
+    def test_no_false_positive_for_nobel_substring(self):
+        """'nobel' should not match inside 'nobelist'."""
+        book = HardcoverBook(
+            id=1,
+            title="Test",
+            description="A nobelist's journey through life",
+        )
+        assert _score_award_signal(book) == 0.0
+
+    def test_no_false_positive_for_booker_substring(self):
+        """'booker' should not match inside 'Bookermans'."""
+        book = HardcoverBook(
+            id=1,
+            title="Test",
+            cached_tags={"Genre": ["Bookermans Guide"]},
+        )
+        assert _score_award_signal(book) == 0.0
 
 
 # --- Rating Quality Tests ---
@@ -165,6 +180,24 @@ class TestDescriptionSignal:
         )
         assert _score_description_signal(book) == 0.0
 
+    def test_no_false_positive_voice_in_invoice(self):
+        """'voice' should not match inside 'invoice'."""
+        book = HardcoverBook(
+            id=1,
+            title="Test",
+            description="An invoice processing system",
+        )
+        assert _score_description_signal(book) == 0.5
+
+    def test_no_false_positive_crafted_in_handcrafted(self):
+        """'crafted' should not match inside 'handcrafted'."""
+        book = HardcoverBook(
+            id=1,
+            title="Test",
+            description="A story about handcrafted items",
+        )
+        assert _score_description_signal(book) == 0.5
+
 
 # --- Popularity Tests ---
 
@@ -207,6 +240,11 @@ class TestEraBonus:
     def test_year_only_string(self):
         book = HardcoverBook(id=1, title="Test", release_date="1960")
         assert _score_era_bonus(book) == 1.0
+
+    def test_non_year_leading_digits(self):
+        """Non-year digit strings at start should not extract a year."""
+        book = HardcoverBook(id=1, title="Test", release_date="ISBN9780")
+        assert _score_era_bonus(book) == 0.5
 
 
 # --- Scorer Integration Tests ---
