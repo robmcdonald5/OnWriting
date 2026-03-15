@@ -107,10 +107,10 @@ def _score_award_signal(book: HardcoverBook) -> float:
 
     score = 0.0
     for keyword in PROSE_AWARDS:
-        if keyword in searchable:
+        if re.search(r"\b" + re.escape(keyword) + r"\b", searchable):
             score += 0.35
     for keyword in MAJOR_LITERARY_AWARDS:
-        if keyword in searchable:
+        if re.search(r"\b" + re.escape(keyword) + r"\b", searchable):
             score += 0.25
     return min(1.0, score)
 
@@ -141,10 +141,10 @@ def _score_description_signal(book: HardcoverBook) -> float:
 
     score = 0.5
     for term in PROSE_QUALITY_TERMS:
-        if term in desc:
+        if re.search(r"\b" + re.escape(term) + r"\b", desc):
             score += 0.15
     for term in PLOT_FOCUSED_TERMS:
-        if term in desc:
+        if re.search(r"\b" + re.escape(term) + r"\b", desc):
             score -= 0.15
     return max(0.0, min(1.0, score))
 
@@ -164,7 +164,7 @@ def _score_era_bonus(book: HardcoverBook) -> float:
     """
     if not book.release_date:
         return 0.5  # Unknown era gets middle score
-    match = re.search(r"(\d{4})", book.release_date)
+    match = re.match(r"(\d{4})", book.release_date)
     if not match:
         return 0.5
     year = int(match.group(1))
