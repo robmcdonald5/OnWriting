@@ -19,6 +19,7 @@ spacy = ">=3.7,<4.0"
 lexicalrichness = "^0.5.1"
 wordfreq = "^3.1.1"
 textstat = "^0.7.13"
+requests = ">=2.28,<3.0"
 
 [tool.poetry.group.fine-tuning]
 optional = true
